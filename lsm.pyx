@@ -15,18 +15,18 @@ cdef extern from "src/lsm.h":
 
     cdef int LSM_OPEN_READONLY = 0x0001
 
-    cdef int LSM_OK = 0
-    cdef int LSM_ERROR = 1
-    cdef int LSM_BUSY = 5
-    cdef int LSM_NOMEM = 7
-    cdef int LSM_READONLY = 8
-    cdef int LSM_IOERR = 10
-    cdef int LSM_CORRUPT = 11
-    cdef int LSM_FULL = 13
-    cdef int LSM_CANTOPEN = 14
-    cdef int LSM_PROTOCOL = 15
-    cdef int LSM_MISUSE = 21
-    cdef int LSM_MISMATCH = 50
+    cpdef int LSM_OK = 0
+    cpdef int LSM_ERROR = 1
+    cpdef int LSM_BUSY = 5
+    cpdef int LSM_NOMEM = 7
+    cpdef int LSM_READONLY = 8
+    cpdef int LSM_IOERR = 10
+    cpdef int LSM_CORRUPT = 11
+    cpdef int LSM_FULL = 13
+    cpdef int LSM_CANTOPEN = 14
+    cpdef int LSM_PROTOCOL = 15
+    cpdef int LSM_MISUSE = 21
+    cpdef int LSM_MISMATCH = 50
 
     # Connections.
     cdef int lsm_new(lsm_env *env, lsm_db **ppDb)
@@ -35,8 +35,6 @@ cdef extern from "src/lsm.h":
 
     cdef int lsm_config(lsm_db *pDb, int verb, ...)
 
-    # The following values may be passed as the second argument to lsm_config().
-    #
     # LSM_CONFIG_AUTOFLUSH:
     #   A read/write integer parameter.
     #
@@ -52,25 +50,13 @@ cdef extern from "src/lsm.h":
     #   mark the live in-memory tree as old after each transaction is committed.
     #
     #   The default value is 1024 (1MB).
-    #
+    cdef int LSM_CONFIG_AUTOFLUSH = 1
+
     # LSM_CONFIG_PAGE_SIZE:
     #   A read/write integer parameter. This parameter may only be set before
     #   lsm_open() has been called.
-    #
-    # LSM_CONFIG_BLOCK_SIZE:
-    #   A read/write integer parameter.
-    #
-    #   This parameter may only be set before lsm_open() has been called. It
-    #   must be set to a power of two between 64 and 65536, inclusive (block
-    #   sizes between 64KB and 64MB).
-    #
-    #   If the connection creates a new database, the block size of the new
-    #   database is set to the value of this option in KB. After lsm_open()
-    #   has been called, querying this parameter returns the actual block
-    #   size of the opened database.
-    #
-    #   The default value is 1024 (1MB blocks).
-    #
+    cdef int LSM_CONFIG_PAGE_SIZE = 2
+
     # LSM_CONFIG_SAFETY:
     #   A read/write integer parameter. Valid values are 0, 1 (the default)
     #   and 2. This parameter determines how robust the database is in the
@@ -86,10 +72,66 @@ cdef extern from "src/lsm.h":
     #     2 (full):   Full robustness. A system crash may not corrupt the
     #                 database file. Following recovery the database file
     #                 contains all successfully committed transactions.
-    #
-    # LSM_CONFIG_AUTOWORK:
+    cdef int LSM_CONFIG_SAFETY = 3
+
+    # LSM_CONFIG_BLOCK_SIZE:
     #   A read/write integer parameter.
     #
+    #   This parameter may only be set before lsm_open() has been called. It
+    #   must be set to a power of two between 64 and 65536, inclusive (block
+    #   sizes between 64KB and 64MB).
+    #
+    #   If the connection creates a new database, the block size of the new
+    #   database is set to the value of this option in KB. After lsm_open()
+    #   has been called, querying this parameter returns the actual block
+    #   size of the opened database.
+    #
+    #   The default value is 1024 (1MB blocks).
+    cdef int LSM_CONFIG_BLOCK_SIZE = 4
+
+    # LSM_CONFIG_AUTOWORK:
+    #   A read/write integer parameter.
+    cdef int LSM_CONFIG_AUTOWORK = 5
+
+    # LSM_CONFIG_MMAP:
+    #   A read/write integer parameter. If this value is set to 0, then the
+    #   database file is accessed using ordinary read/write IO functions. Or,
+    #   if it is set to 1, then the database file is memory mapped and accessed
+    #   that way. If this parameter is set to any value N greater than 1, then
+    #   up to the first N KB of the file are memory mapped, and any remainder
+    #   accessed using read/write IO.
+    #
+    #   The default value is 1 on 64-bit platforms and 32768 on 32-bit platforms.
+    cdef int LSM_CONFIG_MMAP = 7
+
+    # LSM_CONFIG_USE_LOG:
+    #   A read/write boolean parameter. True (the default) to use the log
+    #   file normally. False otherwise.
+    cdef int LSM_CONFIG_USE_LOG = 8
+
+    # LSM_CONFIG_AUTOMERGE:
+    #   A read/write integer parameter. The minimum number of segments to
+    #   merge together at a time. Default value 4.
+    cdef int LSM_CONFIG_AUTOMERGE = 9
+
+    # LSM_CONFIG_MAX_FREELIST:
+    #   A read/write integer parameter. The maximum number of free-list
+    #   entries that are stored in a database checkpoint (the others are
+    #   stored elsewhere in the database).
+    #
+    #   There is no reason for an application to configure or query this
+    #   parameter. It is only present because configuring a small value
+    #   makes certain parts of the lsm code easier to test.
+    cdef int LSM_CONFIG_MAX_FREELIST = 10
+
+    # LSM_CONFIG_MULTIPLE_PROCESSES:
+    #   A read/write boolean parameter. This parameter may only be set before
+    #   lsm_open() has been called. If true, the library uses shared-memory
+    #   and posix advisory locks to co-ordinate access by clients from within
+    #   multiple processes. Otherwise, if false, all database clients must be
+    #   located in the same process. The default value is true.
+    cdef int LSM_CONFIG_MULTIPLE_PROCESSES = 11
+
     # LSM_CONFIG_AUTOCHECKPOINT:
     #   A read/write integer parameter.
     #
@@ -106,42 +148,8 @@ cdef extern from "src/lsm.h":
     #   data into the database file.
     #
     #   The default value is 2048 (checkpoint every 2MB).
-    #
-    # LSM_CONFIG_MMAP:
-    #   A read/write integer parameter. If this value is set to 0, then the
-    #   database file is accessed using ordinary read/write IO functions. Or,
-    #   if it is set to 1, then the database file is memory mapped and accessed
-    #   that way. If this parameter is set to any value N greater than 1, then
-    #   up to the first N KB of the file are memory mapped, and any remainder
-    #   accessed using read/write IO.
-    #
-    #   The default value is 1 on 64-bit platforms and 32768 on 32-bit platforms.
-    #
-    #
-    # LSM_CONFIG_USE_LOG:
-    #   A read/write boolean parameter. True (the default) to use the log
-    #   file normally. False otherwise.
-    #
-    # LSM_CONFIG_AUTOMERGE:
-    #   A read/write integer parameter. The minimum number of segments to
-    #   merge together at a time. Default value 4.
-    #
-    # LSM_CONFIG_MAX_FREELIST:
-    #   A read/write integer parameter. The maximum number of free-list
-    #   entries that are stored in a database checkpoint (the others are
-    #   stored elsewhere in the database).
-    #
-    #   There is no reason for an application to configure or query this
-    #   parameter. It is only present because configuring a small value
-    #   makes certain parts of the lsm code easier to test.
-    #
-    # LSM_CONFIG_MULTIPLE_PROCESSES:
-    #   A read/write boolean parameter. This parameter may only be set before
-    #   lsm_open() has been called. If true, the library uses shared-memory
-    #   and posix advisory locks to co-ordinate access by clients from within
-    #   multiple processes. Otherwise, if false, all database clients must be
-    #   located in the same process. The default value is true.
-    #
+    cdef int LSM_CONFIG_AUTOCHECKPOINT = 12
+
     # LSM_CONFIG_SET_COMPRESSION:
     #   Set the compression methods used to compress and decompress database
     #   content. The argument to this option should be a pointer to a structure
@@ -150,33 +158,21 @@ cdef extern from "src/lsm.h":
     #
     #   This option may only be used before lsm_open() is called. Invoking it
     #   after lsm_open() has been called results in an LSM_MISUSE error.
-    #
+    cdef int LSM_CONFIG_SET_COMPRESSION = 13
+
     # LSM_CONFIG_GET_COMPRESSION:
     #   Query the compression methods used to compress and decompress database
     #   content.
-    #
+    cdef int LSM_CONFIG_GET_COMPRESSION = 14
+
     # LSM_CONFIG_SET_COMPRESSION_FACTORY:
     #   Configure a factory method to be invoked in case of an LSM_MISMATCH
     #   error.
-    #
+    cdef int LSM_CONFIG_SET_COMPRESSION_FACTORY = 15
+
     # LSM_CONFIG_READONLY:
     #   A read/write boolean parameter. This parameter may only be set before
     #   lsm_open() is called.
-
-    cdef int LSM_CONFIG_AUTOFLUSH = 1
-    cdef int LSM_CONFIG_PAGE_SIZE = 2
-    cdef int LSM_CONFIG_SAFETY = 3
-    cdef int LSM_CONFIG_BLOCK_SIZE = 4
-    cdef int LSM_CONFIG_AUTOWORK = 5
-    cdef int LSM_CONFIG_MMAP = 7
-    cdef int LSM_CONFIG_USE_LOG = 8
-    cdef int LSM_CONFIG_AUTOMERGE = 9
-    cdef int LSM_CONFIG_MAX_FREELIST = 10
-    cdef int LSM_CONFIG_MULTIPLE_PROCESSES = 11
-    cdef int LSM_CONFIG_AUTOCHECKPOINT = 12
-    cdef int LSM_CONFIG_SET_COMPRESSION = 13
-    cdef int LSM_CONFIG_GET_COMPRESSION = 14
-    cdef int LSM_CONFIG_SET_COMPRESSION_FACTORY = 15
     cdef int LSM_CONFIG_READONLY = 16
 
     cdef int LSM_SAFETY_OFF =0
@@ -421,14 +417,19 @@ cdef extern from "src/lsm.h":
 
 
 cdef class LSM(object):
-    cdef lsm_db *db
-    cdef readonly basestring filename
-    cdef readonly bint is_open
-    cdef bint open_database
-    cdef readonly int transaction_depth
+    """
+    Python wrapper for SQLite4's LSM implementation.
+    """
+    cdef:
+        lsm_db *db
+        readonly basestring filename
+        readonly bint is_open
+        bint open_database
+        readonly int transaction_depth
 
     def __cinit__(self):
         self.db = <lsm_db *>0
+        lsm_new(NULL, &self.db)
         self.is_open = False
         self.transaction_depth = 0
 
@@ -436,22 +437,57 @@ cdef class LSM(object):
         if self.is_open and self.db:
             lsm_close(self.db)
 
-    def __init__(self, filename, open_database=True):
+    def __init__(self, filename, open_database=True, page_size=None,
+                 block_size=None, safety_level=None, readonly=False,
+                 enable_multiple_processes=True):
+        """
+        :param str filename: Path to database file.
+        :param bool open_database: Whether to open the database automatically
+            when the class is instantiated.
+        :param int page_size: Page size in bytes. Default is 4096.
+        :param int block_size: Block size in kb. Default is 1024 (1MB).
+        :param int safety_level: Safety level in face of crash.
+        :param bool readonly: Open database for read-only access.
+        :param bool enable_multiple_processes: Allow multiple processes to
+            access the database. Default is `True`.
+        """
         self.filename = filename
+        if page_size:
+            self.set_page_size(page_size)
+        if block_size:
+            self.set_block_size(block_size)
+        if safety_level is not None:
+            self.set_safety(safety_level)
+        if readonly:
+            self.set_readonly(True)
+        if not enable_multiple_processes:
+            self.set_multiple_processes(False)
         self.open_database = open_database
         if self.open_database:
             self.open()
 
-    cpdef open(self):
+    cpdef bint open(self):
+        """
+        Open the database. If the database was already open, this will return
+        False, otherwise returns True on success.
+        """
         cdef int rc
         if self.is_open:
             self.close()
+            return False
 
-        self.check(lsm_new(NULL, &self.db))
         self.check(lsm_open(self.db, self.filename))
         self.is_open = True
+        return True
 
-    cpdef close(self):
+    cpdef bint close(self):
+        """
+        Close the database. If the database was already closed, this will
+        return False, otherwise returns True on success.
+
+        Note: you must close all cursors before attempting to close the db,
+        otherwise an `IOError` will be raised.
+        """
         cdef int rc
         if self.is_open:
             rc = lsm_close(self.db)
@@ -460,11 +496,163 @@ cdef class LSM(object):
                               'cursors may still be in use.')
             self.check(rc)
             self.is_open = False
+            return True
+        else:
+            return False
+
+    cpdef autoflush(self, int nkb):
+        """
+        This value determines the amount of data allowed to accumulate in a
+        live in-memory tree before it is marked as old. After committing a
+        transaction, a connection checks if the size of the live in-memory
+        tree, including data structure overhead, is greater than the value of
+        this option in KB. If it is, and there is not already an old in-memory
+        tree, the live in-memory tree is marked as old.
+
+        The maximum allowable value is 1048576 (1GB). There is no minimum
+        value. If this parameter is set to zero, then an attempt is made to
+        mark the live in-memory tree as old after each transaction is
+        committed.
+
+        The default value is 1024 (1MB).
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
+
+    cpdef set_page_size(self, int nbytes):
+        """
+        Note: this may only be set before calling lsm_open().
+
+        Set the page size (in bytes). Default value is 4096 bytes.
+        """
+        if self.is_open:
+            raise ValueError('Unable to set page size. Page size can only '
+                             'be set before calling open().')
+        self.check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
+
+    cpdef set_safety(self, int safety_level):
+        """
+        Valid values are 0, 1 (the default) and 2. This parameter determines
+        how robust the database is in the face of a system crash (e.g. a power
+        failure or operating system crash). As follows:
+
+          0 (off):    No robustness. A system crash may corrupt the database.
+
+          1 (normal): Some robustness. A system crash may not corrupt the
+                      database file, but recently committed transactions may
+                      be lost following recovery.
+
+          2 (full):   Full robustness. A system crash may not corrupt the
+                      database file. Following recovery the database file
+                      contains all successfully committed transactions.
+
+        Values:
+
+        * SAFETY_OFF
+        * SAFETY_NORMAL
+        * SAFETY_FULL
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
+
+    cpdef set_block_size(self, int nkb):
+        """
+        This parameter may only be set before lsm_open() has been called. It
+        must be set to a power of two between 64 and 65536, inclusive (block
+        sizes between 64KB and 64MB).
+
+        If the connection creates a new database, the block size of the new
+        database is set to the value of this option in KB. After lsm_open()
+        has been called, querying this parameter returns the actual block
+        size of the opened database.
+
+        The default value is 1024 (1MB blocks).
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
+
+    cpdef config_mmap(self, int mmap_kb):
+        """
+        If this value is set to 0, then the database file is accessed using
+        ordinary read/write IO functions. Or, if it is set to 1, then the
+        database file is memory mapped and accessed that way. If this parameter
+        is set to any value N greater than 1, then up to the first N KB of the
+        file are memory mapped, and any remainder accessed using read/write IO.
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_MMAP, &mmap_kb))
+
+    cpdef set_automerge(self, int nsegments):
+        """
+        The minimum number of segments to merge together at a time.
+
+        The default value is 4.
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_AUTOMERGE, &nsegments))
+
+    cpdef set_multiple_processes(self, bint enable_multiple_processes):
+        """
+        This parameter may only be set before lsm_open() has been called.
+
+        If true, the library uses shared-memory and posix advisory locks to
+        co-ordinate access by clients from within multiple processes.
+        Otherwise, if false, all database clients must be located in the same
+        process. The default value is true.
+        """
+        self.check(lsm_config(
+            self.db,
+            LSM_CONFIG_MULTIPLE_PROCESSES,
+            &enable_multiple_processes))
+
+    cpdef set_auto_checkpoint(self, int nbytes):
+        """
+        If this option is set to non-zero value N, then a checkpoint is
+        automatically attempted after each N KB of data have been written to
+        the database file.
+
+        The amount of uncheckpointed data already written to the database file
+        is a global parameter. After performing database work (writing to the
+        database file), the process checks if the total amount of uncheckpointed
+        data exceeds the value of this paramter. If so, a checkpoint is performed.
+        This means that this option may cause the connection to perform a
+        checkpoint even if the current connection has itself written very little
+        data into the database file.
+
+        The default value is 2048 (checkpoint every 2MB).
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_AUTOCHECKPOINT, &nbytes))
+
+    cpdef set_readonly(self, bint readonly):
+        """
+        This parameter may only be set before lsm_open() is called.
+        """
+        self.check(lsm_config(self.db, LSM_CONFIG_READONLY, &readonly))
 
     cpdef check(self, int rc):
         if rc == LSM_OK:
             return
-        raise Exception('Operation failed: %s' % rc)
+
+        exc_mapping = {
+            LSM_NOMEM: MemoryError,
+            LSM_READONLY: IOError,
+            LSM_IOERR: IOError,
+            LSM_CORRUPT: IOError,
+            LSM_FULL: IOError,
+            LSM_CANTOPEN: IOError,
+        }
+        exc_message_mapping = {
+            LSM_ERROR: 'Error',
+            LSM_BUSY: ' Busy',
+            LSM_NOMEM: 'Out of memory',
+            LSM_READONLY: 'Database is read-only',
+            LSM_IOERR: 'Unspecified IO error',
+            LSM_CORRUPT: 'Database is corrupt',
+            LSM_FULL: 'Storage device is full',
+            LSM_CANTOPEN: 'Cannot open database',
+            LSM_PROTOCOL: 'Protocol error',
+            LSM_MISUSE: 'Misuse',
+            LSM_MISMATCH: 'Mismatch',
+        }
+        exc_class = exc_mapping.get(rc, Exception)
+        exc_message = exc_message_mapping.get(rc, 'Unknown error')
+
+        raise exc_class('%s: %s' % (exc_message, rc))
 
     def __enter__(self):
         if not self.is_open:
@@ -484,13 +672,14 @@ cdef class LSM(object):
             c_val,
             len(value)))
 
-    cpdef fetch(self, basestring key):
-        cdef lsm_cursor *cursor = <lsm_cursor *>0
-        cdef char *c_key = key
-        cdef char *value
-        cdef char **pvalue = &value
-        cdef int value_length
-        cdef int rc
+    cpdef basestring fetch(self, basestring key):
+        cdef:
+            lsm_cursor *cursor = <lsm_cursor *>0
+            char *c_key = key
+            char *value
+            char **pvalue = &value
+            int value_length
+            int rc
 
         self.check(lsm_csr_open(self.db, &cursor))
         self.check(lsm_csr_seek(cursor, c_key, len(key), LSM_SEEK_EQ))
@@ -538,6 +727,12 @@ cdef class LSM(object):
         else:
             self.delete(key)
 
+    cpdef flush(self):
+        self.check(lsm_flush(self.db))
+
+    cpdef checkpoint(self, int nkb):
+        self.check(lsm_checkpoint(self.db, &nkb))
+
     cpdef begin(self):
         self.transaction_depth += 1
         self.check(lsm_begin(self.db, self.transaction_depth))
@@ -565,10 +760,11 @@ cdef class LSM(object):
 
 
 cdef class Cursor(object):
-    cdef LSM lsm
-    cdef lsm_cursor *cursor
-    cdef bint is_open
-    cdef bint _consumed
+    cdef:
+        LSM lsm
+        lsm_cursor *cursor
+        bint is_open
+        bint _consumed
 
     def __cinit__(self, LSM lsm):
         self.lsm = lsm
@@ -594,6 +790,7 @@ cdef class Cursor(object):
     def __enter__(self):
         self.open()
         self.first()
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
@@ -603,13 +800,27 @@ cdef class Cursor(object):
         return self
 
     def __next__(self):
-        pass
+        cdef int rc
+        cdef basestring key, value
+
+        if self._consumed:
+            raise StopIteration
+
+        key = self.key()
+        value = self.value()
+        try:
+            self.next()
+        except StopIteration:
+            self._consumed = True
+
+        return (key, value)
 
     cpdef seek(self, basestring key, int method=LSM_SEEK_EQ):
+        cdef char *c_key = key
         cdef int rc
         self.lsm.check(lsm_csr_seek(
             self.cursor,
-            <void *>key,
+            <void *>c_key,
             len(key),
             method))
         rc = lsm_csr_valid(self.cursor)
@@ -687,3 +898,5 @@ def test_me():
     print 'key=%s' % str(key[:keyLen])
     lsm_csr_close(cursor)
     lsm_close(db)
+
+include "lsm.pxi"
