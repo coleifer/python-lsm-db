@@ -12,7 +12,7 @@ lsm_extension = Extension(
     sources=[python_source, library_source])
 
 setup(
-    name='sqlite4_lsm',
+    name='lsm-db',
     version='0.1.0',
     description='Python bindings for the SQLite4 LSM database.',
     author='Charles Leifer',
