@@ -500,7 +500,7 @@ cdef class LSM(object):
         else:
             return False
 
-    cpdef autoflush(self, int nkb):
+    cpdef int autoflush(self, int nkb):
         """
         This value determines the amount of data allowed to accumulate in a
         live in-memory tree before it is marked as old. After committing a
@@ -517,8 +517,9 @@ cdef class LSM(object):
         The default value is 1024 (1MB).
         """
         self.check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
+        return nkb
 
-    cpdef set_page_size(self, int nbytes):
+    cpdef int set_page_size(self, int nbytes):
         """
         Note: this may only be set before calling lsm_open().
 
@@ -528,8 +529,9 @@ cdef class LSM(object):
             raise ValueError('Unable to set page size. Page size can only '
                              'be set before calling open().')
         self.check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
+        return nbytes
 
-    cpdef set_safety(self, int safety_level):
+    cpdef int set_safety(self, int safety_level):
         """
         Valid values are 0, 1 (the default) and 2. This parameter determines
         how robust the database is in the face of a system crash (e.g. a power
@@ -552,8 +554,9 @@ cdef class LSM(object):
         * SAFETY_FULL
         """
         self.check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
+        return safety_level
 
-    cpdef set_block_size(self, int nkb):
+    cpdef int set_block_size(self, int nkb):
         """
         This parameter may only be set before lsm_open() has been called. It
         must be set to a power of two between 64 and 65536, inclusive (block
@@ -567,6 +570,7 @@ cdef class LSM(object):
         The default value is 1024 (1MB blocks).
         """
         self.check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
+        return nkb
 
     cpdef config_mmap(self, int mmap_kb):
         """
@@ -625,6 +629,7 @@ cdef class LSM(object):
         self.check(lsm_config(self.db, LSM_CONFIG_READONLY, &readonly))
 
     cpdef check(self, int rc):
+        """Check the return value of a call to an LSM function."""
         if rc == LSM_OK:
             return
 
@@ -655,6 +660,10 @@ cdef class LSM(object):
         raise exc_class('%s: %s' % (exc_message, rc))
 
     def __enter__(self):
+        """
+        Use the database as a context manager. The database will be closed
+        when the wrapped block exits.
+        """
         if not self.is_open:
             self.open()
         return self
@@ -663,6 +672,19 @@ cdef class LSM(object):
         self.close()
 
     cpdef insert(self, basestring key, basestring value):
+        """
+        Add a key/value pair to the database.
+
+        Using dictionary APIs
+        ---------------------
+
+        Rather than calling `insert()`, you can simply treat your database
+        as a dictionary and use the `__setitem__` API:
+
+        # These are equivalent:
+        lsm_db.insert('key', 'value')
+        lsm_db['key'] = 'value'
+        """
         cdef char *c_key = key
         cdef char *c_val = value
         self.check(lsm_insert(
@@ -672,29 +694,193 @@ cdef class LSM(object):
             c_val,
             len(value)))
 
-    cpdef basestring fetch(self, basestring key):
-        cdef:
-            lsm_cursor *cursor = <lsm_cursor *>0
-            char *c_key = key
-            char *value
-            char **pvalue = &value
-            int value_length
-            int rc
+    cpdef basestring fetch(self, basestring key,
+                           int seek_method=LSM_SEEK_EQ):
+        """
+        Retrieve a value from the database.
 
-        self.check(lsm_csr_open(self.db, &cursor))
-        self.check(lsm_csr_seek(cursor, c_key, len(key), LSM_SEEK_EQ))
-        rc = lsm_csr_valid(cursor)
-        if rc != 0:
-            self.check(lsm_csr_value(
-                cursor,
-                <const void **>pvalue,
-                &value_length))
-            lsm_csr_close(cursor)
-            return str(value[:value_length])
+        If the default seek method is used and the key does not exist, a
+        `KeyError` will be raised.
 
-        raise KeyError(key)
+        The following seek methods can be specified.
+
+        * SEEK_EQ (default): match key based on equality. If no match is found,
+            then a `KeyError` is raised.
+        * SEEK_LE: if the key does not exist, return the largest key in the
+            database that is *smaller* than the given key. If no smaller key
+            exists, then a `KeyError` will be raised.
+        * SEEK_GE: if the key does not exist, return the smallest key in the
+            database that is *larger* than the given key. If no larger key
+            exists, then a `KeyError` will be raised.
+
+        Using dictionary APIs
+        ---------------------
+
+        Instead of calling `fetch()`, you can simply treat your database
+        like a dictionary.
+
+        # These are equivalent:
+        val = lsm_db.fetch('key')
+        val = lsm_db['key']
+
+        # You can specify the `seek_method` by passing a tuple:
+        val = lsm_db.fetch('other-key', SEEK_LE)
+        val = lsm_db['other-key', SEEK_LE]
+        """
+        with self.cursor() as cursor:
+            cursor.seek(key, seek_method)
+            return cursor.value()
+
+    def fetch_range(self, start, end, reverse=False):
+        """
+        Fetch a range of keys, inclusive of both the start and end keys. If
+        the start key is not specified, then the first key will be used. If
+        the end key is not specified, then all succeeding keys will be fetched.
+
+        If you are iterating in ascending order (default), then the logic for
+        selecting the first and last key in the event either key is missing is
+        such that:
+
+        * The start key will be the smallest key in the database that is
+          larger than the given key (same as SEEK_GE).
+        * The end key will be the largest key in the database that is smaller
+          than the given key (same as SEEK_LE).
+
+        If you are iterating in descending order (reverse=True), then the logic
+        for selecting the first and last key in the event either key is missing
+        is such that:
+
+        * The start key will be the largest key in the database that is
+          smaller than the given key (same as SEEK_LE).
+        * The end key will be the smallest key in the database that is larger
+          than the given key (same as SEEK_GE).
+
+        Examples
+        --------
+
+        An example should clarify. Say we have the following data:
+
+        * 'a' -> 'A'
+        * 'c' -> 'C'
+        * 'd' -> 'D'
+        * 'f' -> 'F'
+
+        Here are some example calls using ascending order:
+
+        * ('a', 'd') -> [('a', 'A'), ('c', 'C'), ('d', 'D')]
+        * ('a', 'e') -> [('a', 'A'), ('c', 'C'), ('d', 'D')]
+        * ('b', 'e') -> [('c', 'C'), ('d', 'D')]
+
+        If one of the boundaries is not specified (`None`), then it will
+        start at the lowest or highest key, respectively.
+
+        * (None, 'ccc') -> [('a', 'A'), ('c', 'C')]
+        * ('ccc', None) -> [('d', 'D'), ('f', 'F')]
+        * (None, 'x') -> [('a', 'A'), ('c', 'C'), ('d', 'D'), ('f', 'F')]
+
+        If the start key is higher than the highest key, no results are
+        returned.
+
+        * ('x', None) -> []
+
+        If the end key is lower than the lowest key, no results are returned.
+
+        * (None, '0') -> []
+
+        NOTE:
+
+            If the start key is greater than the end key, lsm-python will
+            assume you want the range in reverse order.
+
+        Sorting in Reverse
+        ------------------
+
+        Examples in descending (reverse) order:
+
+        * ('d', 'a') -> [('d', 'D'), ('c', 'C'), ('a', 'A')]
+        * ('e', 'a') -> [('d', 'D'), ('c', 'C'), ('a', 'A')]
+        * ('e', 'b') -> [('d', 'D'), ('c', 'C')]
+
+        If one of the boundaries is not specified (`None`), then it will start
+        at the highest and lowest keys, respectively.
+
+        NOTE:
+
+            If one or both keys is `None` and you wish to fetch in reverse,
+            you need to specify a third parameter, `reverse=True`.
+
+        * ('ccc', None, True) -> [('c', 'C'), ('a', 'A')]
+        * (None, 'ccc', True) -> [('f', 'F'), ('d', 'D')]
+        * ('x', None, True) -> [('f', 'F'), ('d', 'D'), ('c', 'C'), ('a', 'A')]
+
+        If the end key is higher than the highest key, no results are
+        returned.
+
+        * (None, 'x', True) -> []
+
+        If the start key is lower than the lowest key, no results are
+        returned.
+
+        * ('0', None, True) -> []
+
+        Using dictionary APIs
+        ---------------------
+
+        You can fetch ranges of key/value pairs using Python's dictionary API.
+
+        # These are equivalent:
+        items = lsm_db.fetch_range('2015.01.01', '2015.01.31')
+        items = lsm_db['2015.01.01':'2015.01.31']
+
+        # You can omit the start or end to include all values before or
+        # after.
+        items = lsm_db.fetch_range(None, '2014.12.31')
+        items = lsm_db[:'2014.12.31']
+
+        items = lsm_db.fetch_range('2015.01.01', None)
+        items = lsm_db['2015.01.01':]
+
+        # If the start value is greater than the end value, then the search
+        # will be done in reverse. However, if either the start or end is
+        # `None`, then the `step` of the slice should be `True`:
+        reverse_items = db.fetch_range('zzz', 'aaa')
+        reverse_items = db['zzz':'aaa']
+
+        dates_reverse = db.fetch_range('2014.12.31', None, reverse=True)
+        dates_reverse = db['2014.12.31'::True]  # Note the second colon.
+        """
+        if reverse and start and end and start < end:
+            raise ValueError('"%s" is less than "%s", but reverse was '
+                             'explicitly selected.' % (start, end))
+
+        if start and end and start > end:
+            reverse = True
+
+        try:
+            if reverse:
+                cursor = self.cursor(reverse=True)
+            else:
+                cursor = self.cursor()
+
+            for item in cursor.fetch_range(start, end):
+                yield item
+        finally:
+            cursor.close()
 
     cpdef delete(self, basestring key):
+        """
+        Remove the key from the database. If the key does not exist, no
+        exception is raised.
+
+        Using dictionary APIs
+        ---------------------
+
+        You can delete keys using Python's dictionary API:
+
+        # These are equivalent:
+        lsm_db.delete('some-key')
+        del lsm_db['some-key']
+        """
         cdef char *c_key = key
         self.check(lsm_delete(
             self.db,
@@ -705,6 +891,15 @@ cdef class LSM(object):
         """
         Delete a range of keys, though the start and end keys themselves
         are not deleted.
+
+        Using dictionary APIs
+        ---------------------
+
+        You can delete a range of keys using Python's dictionary API:
+
+        # These are equivalent:
+        lsm_db.delete_range('bar', 'foo')
+        del lsm_db['bar':'foo']
         """
         cdef char *c_start = start
         cdef char *c_end = end
@@ -715,87 +910,279 @@ cdef class LSM(object):
             c_end,
             len(end)))
 
-    def __getitem__(self, basestring key):
-        return self.fetch(key)
+    def __getitem__(self, key):
+        """
+        Dictionary API wrapper for the `fetch()` and `fetch_range()` methods.
+        """
+        cdef int seek_method = LSM_SEEK_EQ
+        cdef bint reverse
 
-    def __setitem__(self, basestring key, basestring value):
+        if isinstance(key, slice):
+            reverse =  key.step is True
+            return self.fetch_range(key.start, key.stop, reverse)
+        else:
+            if isinstance(key, tuple):
+                key, seek_method = key
+            return self.fetch(key, seek_method)
+
+    def __setitem__(self, key, value):
+        """
+        Dictionary API wrapper for the `insert()` method.
+        """
         self.insert(key, value)
 
     def __delitem__(self, key):
+        """
+        Dictionary API wrapper for the `delete()` and `delete_range()` methods.
+        """
         if isinstance(key, slice):
             self.delete_range(key.start, key.stop)
         else:
             self.delete(key)
 
+    def __contains__(self, key):
+        """
+        Return a boolean indicating whether the given key exists.
+        """
+        try:
+            self.fetch(key)
+        except KeyError:
+            return False
+        else:
+            return True
+
+    def __iter__(self):
+        """
+        Efficiently iterate through the items in the database. This method
+        yields successive key/value pairs.
+        """
+        with self.cursor() as cursor:
+            for item in cursor:
+                yield item
+
+    def __reversed__(self):
+        """
+        Efficiently iterate through the items in the database in reverse
+        order. This method yields successive key/value pairs.
+        """
+        with self.cursor(True) as cursor:
+            for item in cursor:
+                yield item
+
+    def keys(self, reverse=False):
+        """
+        Return a generator that successively yields the keys in the database.
+        If `reverse` is `True` the keys will be returned in descending order.
+        """
+        with self.cursor() as cursor:
+            if reverse:
+                cursor.last()
+                while cursor.is_valid():
+                    yield cursor.key()
+                    cursor.previous()
+            else:
+                cursor.first()
+                while cursor.is_valid():
+                    yield cursor.key()
+                    cursor.next()
+
+    def values(self, reverse=False):
+        """
+        Return a generator that successively yields the values in the database.
+        The values are ordered based on their key. If `reverse` is `True`, then
+        the keys will be iterated through in descending order.
+        """
+        with self.cursor() as cursor:
+            if reverse:
+                cursor.last()
+                while cursor.is_valid():
+                    yield cursor.value()
+                    cursor.previous()
+            else:
+                cursor.first()
+                while cursor.is_valid():
+                    yield cursor.value()
+                    cursor.next()
+
     cpdef flush(self):
+        """Flush the in-memory tree to disk, creating a new segment."""
         self.check(lsm_flush(self.db))
 
     cpdef checkpoint(self, int nkb):
+        """Write to the database file header."""
         self.check(lsm_checkpoint(self.db, &nkb))
 
     cpdef begin(self):
+        """
+        Begin a transaction. Transactions can be nested.
+
+        Note: in most cases it is preferable to use the `transaction()`
+        context manager/decorator.
+        """
         self.transaction_depth += 1
         self.check(lsm_begin(self.db, self.transaction_depth))
 
-    cpdef commit(self):
-        self.transaction_depth -= 1
-        self.check(lsm_commit(self.db, self.transaction_depth))
-
-    cpdef rollback(self, keep_transaction=True):
-        if not keep_transaction:
+    cpdef bint commit(self):
+        """
+        Commit the inner-most transaction. Returns a boolean indicating
+        whether changes were actually committed.
+        """
+        if self.transaction_depth > 0:
             self.transaction_depth -= 1
-        self.check(lsm_rollback(self.db, self.transaction_depth))
+            self.check(lsm_commit(self.db, self.transaction_depth))
+            return True
+        return False
+
+    cpdef bint rollback(self, keep_transaction=True):
+        """
+        Rollback the inner-most transaction. If `keep_transaction` is `True`,
+        then the transaction will remain open after the changes were rolled
+        back.
+
+        Returns a boolean indicating whether changes were actually rolled back.
+        """
+        if self.transaction_depth > 0:
+            if not keep_transaction:
+                self.transaction_depth -= 1
+            self.check(lsm_rollback(self.db, self.transaction_depth))
+            return True
+        return False
 
     def transaction(self):
+        """
+        Create a context manager that runs the wrapped block in a transaction.
+
+        Example:
+
+        with lsm_db.transaction() as txn:
+            lsm_db['k1'] = 'v1'
+
+        with lsm_db.transaction() as txn:
+            lsm_db['k1'] = 'v1-1'
+            txn.rollback()
+
+        assert lsm_db['k1'] == 'v1'
+
+        You can also use the `transaction()` method as a decorator. If the
+        function returns normally, the transaction is committed, otherwise
+        it is rolled back.
+
+        @lsm_db.transaction()
+        def transfer_funds(from_account, to_account, amount):
+            # transfer money...
+            return
+        """
         return Transaction(self)
 
-    def commit_on_success(self, fn):
-        def wrapper(*args, **kwargs):
-            with self.transaction():
-                return fn(*args, **kwargs)
-        return wrapper
+    cpdef cursor(self, bint reverse=False):
+        """
+        Create a cursor and return it as a context manager. After the wrapped
+        block, the cursor is closed.
 
-    cpdef cursor(self):
-        return Cursor(self)
+        If `reverse` is `True`, then the cursor will iterate over keys in
+        descending order.
+
+        with lsm_db.cursor() as cursor:
+            for key, value in cursor.fetch_range('2015.01.01', '2015.01.31'):
+                # do something with data...
+
+        with lsm_db.cursor(reverse=True) as cursor:
+            for key, value in cursor.fetch_range('2015.01.31', '2015.01.01'):
+                # data is now ordered descending order.
+
+        NOTE:
+            In general the `cursor()` context manager should be used as it
+            ensures cursors are properly cleaned up when you are done using
+            them.
+
+            LSM databases cannot be closed as long as there are any open
+            cursors, so it is very important to close them when finished.
+        """
+        return Cursor(self, reverse)
 
 
 cdef class Cursor(object):
+    """
+    Wrapper around the `lsm_cursor` object.
+
+    By default the
+
+    Functions seek(), first() and last() are "seek" functions. Whether or not
+    next() and previous() may be called successfully also depends on the most
+    recent seek function called on the cursor. Specifically:
+
+    * At least one seek function must have been called on the cursor.
+    * To call next(), the most recent call to a seek function must have been
+      either first() or a call to seek() specifying SEEK_GE.
+    * To call previous(), the most recent call to a seek function must have
+      been either last() or a call to seek() specifying LSM_SEEK_LE.
+
+    Otherwise, if the above conditions are not met when next() or previous()
+    is called, LSM_MISUSE is returned and the cursor position remains
+    unchanged.
+
+    For more information, see:
+
+    http://www.sqlite.org/src4/doc/trunk/www/lsmusr.wiki#reading_from_a_database
+    """
     cdef:
         LSM lsm
         lsm_cursor *cursor
         bint is_open
         bint _consumed
+        bint _reverse
 
-    def __cinit__(self, LSM lsm):
+    def __cinit__(self, LSM lsm, bint reverse):
         self.lsm = lsm
         self.cursor = <lsm_cursor *>0
         lsm_csr_open(self.lsm.db, &self.cursor)
         self.is_open = True
         self._consumed = False
+        self._reverse = reverse
 
     def __dealloc__(self):
         if self.is_open:
             self.close()
 
     cpdef open(self):
+        """
+        Open the cursor. In general this method does not need to be called
+        by applications, as it is called automatically when a Cursor is
+        instantiated.
+        """
         if not self.is_open:
             lsm_csr_open(self.lsm.db, &self.cursor)
             self.is_open = True
 
     cpdef close(self):
+        """
+        Close the cursor. If you are using the cursor as a context manager,
+        then it is not necessary to call this method.
+        """
         if self.is_open:
             lsm_csr_close(self.cursor)
             self.is_open = False
 
     def __enter__(self):
+        """
+        Expose the cursor as a context manager. After the wrapped block,
+        the cursor will be closed, which is very important.
+        """
         self.open()
-        self.first()
+        if self._reverse:
+            self.last()
+        else:
+            self.first()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
     def __iter__(self):
+        """
+        Iterate from the cursor's current position. The iterator returns
+        successive key/value pairs.
+        """
         self._consumed = False
         return self
 
@@ -809,13 +1196,45 @@ cdef class Cursor(object):
         key = self.key()
         value = self.value()
         try:
-            self.next()
+            if self._reverse:
+                self.previous()
+            else:
+                self.next()
         except StopIteration:
             self._consumed = True
 
         return (key, value)
 
+    cpdef int compare(self, basestring key, int nlen=0):
+        """
+        Compare the given key with key at the cursor's current position.
+        """
+        cdef char *c_key = key
+        cdef int res
+        if nlen == 0:
+            nlen = len(key)
+        rc = lsm_csr_cmp(
+            self.cursor,
+            c_key,
+            nlen,
+            &res)
+        self.lsm.check(rc)
+        return res
+
     cpdef seek(self, basestring key, int method=LSM_SEEK_EQ):
+        """
+        Seek to the given key using the specified matching method. If the
+        operation did not find a valid key, then a `KeyError` will be raised.
+
+        * SEEK_EQ (default): match key based on equality. If no match is found,
+            then a `KeyError` is raised.
+        * SEEK_LE: if the key does not exist, return the largest key in the
+            database that is *smaller* than the given key. If no smaller key
+            exists, then a `KeyError` will be raised.
+        * SEEK_GE: if the key does not exist, return the smallest key in the
+            database that is *larger* than the given key. If no larger key
+            exists, then a `KeyError` will be raised.
+        """
         cdef char *c_key = key
         cdef int rc
         self.lsm.check(lsm_csr_seek(
@@ -823,17 +1242,33 @@ cdef class Cursor(object):
             <void *>c_key,
             len(key),
             method))
-        rc = lsm_csr_valid(self.cursor)
-        if not rc:
+        if not self.is_valid():
             raise KeyError(key)
 
+    cpdef bint is_valid(self):
+        """
+        Return a boolean indicating whether the cursor is pointing at a
+        valid record.
+        """
+        return lsm_csr_valid(self.cursor) != 0
+
     cpdef first(self):
+        """Jump to the first key in the database."""
         self.lsm.check(lsm_csr_first(self.cursor))
 
     cpdef last(self):
+        """Jump to the last key in the database."""
         self.lsm.check(lsm_csr_last(self.cursor))
 
     cpdef next(self):
+        """
+        Advance the cursor to the next record. If no next record exists, then
+        a `StopIteration` will be raised.
+
+        If you encounter an Exception indicating "Misuse (21)" when calling
+        this method, then you need to be sure that you are either calling
+        `first()` or `seek()` with a method of `SEEK_GE`.
+        """
         cdef int rc
         self.lsm.check(lsm_csr_next(self.cursor))
         rc = lsm_csr_valid(self.cursor)
@@ -841,11 +1276,71 @@ cdef class Cursor(object):
             raise StopIteration
 
     cpdef previous(self):
+        """
+        Move the cursor to the previous record. If no previous record exists,
+        then a `StopIteration` will be raised.
+
+        If you encounter an Exception indicating "Misuse (21)" when calling
+        this method, then you need to be sure that you are either calling
+        `last()` or `seek()` with a method of `SEEK_LE`.
+        """
         cdef int rc
         self.lsm.check(lsm_csr_prev(self.cursor))
         rc = lsm_csr_valid(self.cursor)
         if not rc:
             raise StopIteration
+
+    def fetch_until(self, key):
+        """
+        This method returns a generator that yields key/value pairs obtained
+        by iterating from the cursor's current position until it reaches
+        the given `key`.
+        """
+        cdef int is_reverse = self._reverse
+        cdef int res
+        cdef int nkey
+
+        if key is not None:
+            nkey = len(key)
+
+        while self.is_valid():
+            if key is not None:
+                res = self.compare(key, nkey)
+                if not is_reverse and res > 0:
+                    break
+                elif is_reverse and res < 0:
+                    break
+
+            yield (self.key(), self.value())
+            try:
+                if not is_reverse:
+                    self.next()
+                else:
+                    self.previous()
+            except StopIteration:
+                break
+
+    def fetch_range(self, start, end):
+        cdef int is_reverse = self._reverse
+        cdef int seek_method = is_reverse and LSM_SEEK_LE or LSM_SEEK_GE
+
+        if (is_reverse and start < end) or (not is_reverse and start > end):
+            if start and end:
+                start, end = end, start
+
+        if not start:
+            if is_reverse:
+                self.last()
+            else:
+                self.first()
+        else:
+            try:
+                self.seek(start, seek_method)
+            except KeyError:
+                raise StopIteration
+
+        for key, value in self.fetch_until(end):
+            yield (key, value)
 
     cpdef basestring key(self):
         cdef char *k
@@ -872,31 +1367,29 @@ cdef class Transaction(object):
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         if exc_type:
-            self.lsm.rollback(keep_transaction=False)
+            self.rollback(False)
         else:
             try:
-                self.lsm.commit()
+                self.commit(False)
             except:
-                self.lsm.rollback(keep_transaction=False)
+                self.lsm.rollback(False)
                 raise
 
+    def __call__(self, fn):
+        def inner(*args, **kwargs):
+            with self:
+                return fn(*args, **kwargs)
+        return inner
 
-def test_me():
-    cdef lsm_db *db = <lsm_db *>0
-    cdef lsm_cursor *cursor = <lsm_cursor *>0
-    cdef char *key
-    cdef char **keyPtr = &key
-    cdef int keyLen
-    lsm_new(NULL, &db)
-    lsm_open(db, 'tmp2.lsm')
-    lsm_insert(db, 'foo', 3, 'nugget', 6)
-    lsm_insert(db, 'bar', 3, 'zaizee', 6)
-    lsm_csr_open(db, &cursor)
-    lsm_csr_first(cursor)
-    lsm_csr_key(cursor, <const void **>keyPtr, &keyLen)
-    print 'key len=%s' % keyLen
-    print 'key=%s' % str(key[:keyLen])
-    lsm_csr_close(cursor)
-    lsm_close(db)
+    def commit(self, begin=True):
+        cdef int rc
+        rc = self.lsm.commit()
+        if begin:
+            self.lsm.begin()
+        return rc
+
+    def rollback(self, begin=True):
+        return self.lsm.rollback(keep_transaction=begin)
+
 
 include "lsm.pxi"
