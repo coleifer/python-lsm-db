@@ -975,17 +975,20 @@ cdef class LSM(object):
         Return a generator that successively yields the keys in the database.
         If `reverse` is `True` the keys will be returned in descending order.
         """
+        cdef basestring key
+
         with self.cursor() as cursor:
             if reverse:
                 cursor.last()
-                while cursor.is_valid():
+                while True:
                     yield cursor.key()
                     cursor.previous()
             else:
                 cursor.first()
-                while cursor.is_valid():
-                    yield cursor.key()
+                while True:
+                    key = cursor.key()
                     cursor.next()
+                    yield key
 
     def values(self, reverse=False):
         """
@@ -993,17 +996,20 @@ cdef class LSM(object):
         The values are ordered based on their key. If `reverse` is `True`, then
         the keys will be iterated through in descending order.
         """
+        cdef basestring value
+
         with self.cursor() as cursor:
             if reverse:
                 cursor.last()
-                while cursor.is_valid():
+                while True:
                     yield cursor.value()
                     cursor.previous()
             else:
                 cursor.first()
-                while cursor.is_valid():
-                    yield cursor.value()
+                while True:
+                    value = cursor.value()
                     cursor.next()
+                    yield value
 
     cpdef flush(self):
         """Flush the in-memory tree to disk, creating a new segment."""
