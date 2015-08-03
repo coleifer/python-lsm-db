@@ -322,6 +322,7 @@ cdef extern from "src/lsm.h":
     cdef int lsm_delete(lsm_db *pDb, const void *pKey, int nKey)
     cdef int lsm_delete_range(lsm_db *pDb, const void *pKey, int nKey, const void *pKey2, int nKey2)
 
+    cdef int lsm_work(lsm_db *pDb, int nMerge, int nKB, int *pnWrite)
     cdef int lsm_flush(lsm_db *pDb)
     cdef int lsm_checkpoint(lsm_db *pDb, int *pNumKBWritten)
 
@@ -1008,6 +1009,36 @@ cdef class LSM(object):
         """Flush the in-memory tree to disk, creating a new segment."""
         self.check(lsm_flush(self.db))
 
+    cpdef work(self, int nmerge=1, int nkb=4096):
+        """
+        Explicitly perform work on the database structure.
+
+        `nkb` is passed as a limit on the number of KB of data that should
+        be written to the database file before the call returns. It is a hint
+        and is not honored strictly.
+
+        If the database has an old in-memory tree when lsm_work() is called,
+        it is flushed to disk. If this means that more than nKB KB of data is
+        written to the database file, no further work is performed. Otherwise,
+        the number of KB written is subtracted from nKB before proceeding.
+
+        Typically you will use `1` for the `nmerge` parameter in order to
+        "optimize" the database.
+
+        This function returns the number of KB written to the database file.
+
+        A background thread or process is ideal for running this method.
+        """
+        cdef int nbytes_written
+        cdef int rc
+        rc = lsm_work(self.db, nmerge, nkb, &nbytes_written)
+        if rc == LSM_BUSY:
+            raise RuntimeError('Unable to acquire the worker lock. Perhaps '
+                               'another thread or process is working on the '
+                               'database?')
+        self.check(rc)
+        return nbytes_written
+
     cpdef checkpoint(self, int nkb):
         """Write to the database file header."""
         self.check(lsm_checkpoint(self.db, &nkb))
@@ -1321,6 +1352,13 @@ cdef class Cursor(object):
                 break
 
     def fetch_range(self, start, end):
+        """
+        Fetch a range of keys, inclusive of both the start and end keys. If
+        the start key is not specified, then the first key will be used. If
+        the end key is not specified, then all succeeding keys will be fetched.
+
+        For complete details, see the docstring for `LSM.fetch_range`.
+        """
         cdef int is_reverse = self._reverse
         cdef int seek_method = is_reverse and LSM_SEEK_LE or LSM_SEEK_GE
 
@@ -1343,12 +1381,14 @@ cdef class Cursor(object):
             yield (key, value)
 
     cpdef basestring key(self):
+        """Return the key at the cursor's current position."""
         cdef char *k
         cdef int klen
         lsm_csr_key(self.cursor, <const void **>(&k), &klen)
         return str(k[:klen])
 
     cpdef basestring value(self):
+        """Return the value at the cursor's current position."""
         cdef char *v
         cdef int vlen
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
@@ -1356,6 +1396,33 @@ cdef class Cursor(object):
 
 
 cdef class Transaction(object):
+    """
+    Context manager and decorator to run the wrapped block in a transaction.
+    LSM supports nested transactions, so the context manager/decorator can be
+    mixed and matched and nested arbitrarily.
+
+    Rather than instantiating this class directly, use `LSM.transaction()`.
+
+    Example:
+
+    with lsm_db.transaction() as txn:
+        lsm_db['k1'] = 'v1'
+
+    with lsm_db.transaction() as txn:
+        lsm_db['k1'] = 'v1-1'
+        txn.rollback()
+
+    assert lsm_db['k1'] == 'v1'
+
+    You can also use the `transaction()` method as a decorator. If the
+    function returns normally, the transaction is committed, otherwise
+    it is rolled back.
+
+    @lsm_db.transaction()
+    def transfer_funds(from_account, to_account, amount):
+        # transfer money...
+        return
+    """
     cdef LSM lsm
 
     def __init__(self, lsm):
@@ -1382,6 +1449,12 @@ cdef class Transaction(object):
         return inner
 
     def commit(self, begin=True):
+        """
+        Commit the transaction and optionally open a new transaction.
+        This is especially useful for context managers, where you may commit
+        midway through a wrapped block of code, but want to retain
+        transactional behavior for the rest of the block.
+        """
         cdef int rc
         rc = self.lsm.commit()
         if begin:
@@ -1389,6 +1462,12 @@ cdef class Transaction(object):
         return rc
 
     def rollback(self, begin=True):
+        """
+        Rollback the transaction and optionally retain the open transaction.
+        This is especially useful for context managers, where you may rollback
+        midway through a wrapped block of code, but want to retain the
+        transactional behavior for the rest of the block.
+        """
         return self.lsm.rollback(keep_transaction=begin)
 
 
