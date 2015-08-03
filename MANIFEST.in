@@ -1,0 +1,13 @@
+include README.md
+include LICENSE
+include SQLITE_LICENSE
+include lsm.c
+include lsm.pyx
+include lsm.pxi
+include tests.py
+recursive-include docs *
+recursive-include src *
+
+global-exclude *.pyc
+global-exclude *.o
+global-exclude *.so.0.1
