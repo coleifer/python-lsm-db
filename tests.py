@@ -686,6 +686,51 @@ class TestCursors(BaseTestLSM):
             ('bb', 'bbb'),
         ])
 
+    def test_cursor_consumed(self):
+        for reverse in (False, True):
+            with self.db.cursor(reverse=reverse) as cursor:
+                l1 = [item for item in cursor]
+                l2 = [item for item in cursor]
+                if reverse:
+                    cursor.last()
+                else:
+                    cursor.first()
+                k1 = [key for key in cursor.keys()]
+                k2 = [key for key in cursor.keys()]
+                if reverse:
+                    cursor.last()
+                else:
+                    cursor.first()
+                v1 = [value for value in cursor.values()]
+                v2 = [value for value in cursor.values()]
+
+            self.assertTrue(len(l1) == 7)
+            self.assertEqual(l2, [])
+            self.assertTrue(len(k1) == 7)
+            self.assertEqual(k2, [])
+            self.assertTrue(len(v1) == 7)
+            self.assertEqual(v2, [])
+
+    def test_keys_and_values(self):
+        t_keys = ['aa', 'bb', 'bbb', 'dd', 'ee', 'gg', 'zz']
+        t_values = ['aaa', 'bbb', 'bbb', 'ddd', 'eee', 'ggg', 'zzz']
+
+        with self.db.cursor() as cursor:
+            keys = [key for key in cursor.keys()]
+            cursor.first()
+            values = [value for value in cursor.values()]
+
+        self.assertEqual(keys, t_keys)
+        self.assertEqual(values, t_values)
+
+        with self.db.cursor(True) as cursor:
+            keys = [key for key in cursor.keys()]
+            cursor.last()
+            values = [value for value in cursor.values()]
+
+        self.assertEqual(keys, list(reversed(t_keys)))
+        self.assertEqual(values, list(reversed(t_values)))
+
 
 class TestLSMOptions(BaseTestLSM):
     def test_readonly(self):

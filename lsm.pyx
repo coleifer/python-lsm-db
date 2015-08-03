@@ -1202,7 +1202,7 @@ cdef class Cursor(object):
         Iterate from the cursor's current position. The iterator returns
         successive key/value pairs.
         """
-        self._consumed = False
+        self._consumed = not self.is_valid()
         return self
 
     def __next__(self):
@@ -1383,6 +1383,8 @@ cdef class Cursor(object):
         return str(v[:vlen])
 
     def keys(self):
+        if not self.is_valid():
+            raise StopIteration
         while True:
             yield self.key()
             if self._reverse:
@@ -1391,6 +1393,8 @@ cdef class Cursor(object):
                 self.next()
 
     def values(self):
+        if not self.is_valid():
+            raise StopIteration
         while True:
             yield self.value()
             if self._reverse:
