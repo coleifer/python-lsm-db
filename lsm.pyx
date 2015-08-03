@@ -977,18 +977,9 @@ cdef class LSM(object):
         """
         cdef basestring key
 
-        with self.cursor() as cursor:
-            if reverse:
-                cursor.last()
-                while True:
-                    yield cursor.key()
-                    cursor.previous()
-            else:
-                cursor.first()
-                while True:
-                    key = cursor.key()
-                    cursor.next()
-                    yield key
+        with self.cursor(reverse) as cursor:
+            for key in cursor.keys():
+                yield key
 
     def values(self, reverse=False):
         """
@@ -996,20 +987,11 @@ cdef class LSM(object):
         The values are ordered based on their key. If `reverse` is `True`, then
         the keys will be iterated through in descending order.
         """
-        cdef basestring value
+        cdef basestring key
 
-        with self.cursor() as cursor:
-            if reverse:
-                cursor.last()
-                while True:
-                    yield cursor.value()
-                    cursor.previous()
-            else:
-                cursor.first()
-                while True:
-                    value = cursor.value()
-                    cursor.next()
-                    yield value
+        with self.cursor(reverse) as cursor:
+            for value in cursor.values():
+                yield value
 
     cpdef flush(self):
         """Flush the in-memory tree to disk, creating a new segment."""
@@ -1167,7 +1149,7 @@ cdef class Cursor(object):
         lsm_cursor *cursor
         bint is_open
         bint _consumed
-        bint _reverse
+        readonly bint _reverse
 
     def __cinit__(self, LSM lsm, bint reverse):
         self.lsm = lsm
@@ -1399,6 +1381,22 @@ cdef class Cursor(object):
         cdef int vlen
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
         return str(v[:vlen])
+
+    def keys(self):
+        while True:
+            yield self.key()
+            if self._reverse:
+                self.previous()
+            else:
+                self.next()
+
+    def values(self):
+        while True:
+            yield self.value()
+            if self._reverse:
+                self.previous()
+            else:
+                self.next()
 
 
 cdef class Transaction(object):
