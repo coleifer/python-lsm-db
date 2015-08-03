@@ -477,6 +477,10 @@ cdef class LSM(object):
             self.close()
             return False
 
+        if self.db is NULL:
+            self.db = <lsm_db *>0
+            self.check(lsm_new(NULL, &self.db))
+
         self.check(lsm_open(self.db, self.filename))
         self.is_open = True
         return True
@@ -495,6 +499,7 @@ cdef class LSM(object):
             if rc in (LSM_BUSY, LSM_MISUSE):
                 raise IOError('Unable to close database, one or more '
                               'cursors may still be in use.')
+            self.db = NULL
             self.check(rc)
             self.is_open = False
             return True

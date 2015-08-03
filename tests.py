@@ -31,6 +31,9 @@ class BaseTestLSM(unittest.TestCase):
 
 
 class TestLSM(BaseTestLSM):
+    def test_db_open_close(self):
+        self.db['foo'] = 'bar'
+
     def test_dict_api(self):
         self.db['k1'] = 'v1'
         self.db['k2'] = 'v2'
@@ -742,8 +745,12 @@ class TestLSMOptions(BaseTestLSM):
         self.assertEqual(db['foo'], 'bar')
 
         def set_key():
-            self.db['foo'] = 'bar-1'
+            db['foo'] = 'bar-1'
         self.assertRaises(IOError, set_key)
+
+        self.db.open()
+        self.db['foo'] = 'bar-1'
+        self.assertEqual(self.db['foo'], 'bar-1')
 
     def test_no_open(self):
         db = lsm.LSM('test.lsm', open_database=False)
