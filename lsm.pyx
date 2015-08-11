@@ -491,7 +491,7 @@ cdef class LSM(object):
         return False, otherwise returns True on success.
 
         Note: you must close all cursors before attempting to close the db,
-        otherwise an `IOError` will be raised.
+        otherwise an ``IOError`` will be raised.
         """
         cdef int rc
         if self.is_open:
@@ -527,7 +527,7 @@ cdef class LSM(object):
 
     cpdef int set_page_size(self, int nbytes):
         """
-        Note: this may only be set before calling lsm_open().
+        .. warning: This may only be set before calling lsm_open().
 
         Set the page size (in bytes). Default value is 4096 bytes.
         """
@@ -543,13 +543,13 @@ cdef class LSM(object):
         how robust the database is in the face of a system crash (e.g. a power
         failure or operating system crash). As follows:
 
-          0 (off):    No robustness. A system crash may corrupt the database.
+        * 0 (off):    No robustness. A system crash may corrupt the database.
 
-          1 (normal): Some robustness. A system crash may not corrupt the
+        * 1 (normal): Some robustness. A system crash may not corrupt the
                       database file, but recently committed transactions may
                       be lost following recovery.
 
-          2 (full):   Full robustness. A system crash may not corrupt the
+        * 2 (full):   Full robustness. A system crash may not corrupt the
                       database file. Following recovery the database file
                       contains all successfully committed transactions.
 
@@ -564,8 +564,9 @@ cdef class LSM(object):
 
     cpdef int set_block_size(self, int nkb):
         """
-        This parameter may only be set before lsm_open() has been called. It
-        must be set to a power of two between 64 and 65536, inclusive (block
+        .. warning: This may only be set before calling lsm_open().
+
+        Must be set to a power of two between 64 and 65536, inclusive (block
         sizes between 64KB and 64MB).
 
         If the connection creates a new database, the block size of the new
@@ -598,7 +599,7 @@ cdef class LSM(object):
 
     cpdef set_multiple_processes(self, bint enable_multiple_processes):
         """
-        This parameter may only be set before lsm_open() has been called.
+        .. warning: This may only be set before calling lsm_open().
 
         If true, the library uses shared-memory and posix advisory locks to
         co-ordinate access by clients from within multiple processes.
@@ -636,10 +637,7 @@ cdef class LSM(object):
 
     cpdef int pages_written(self):
         """
-        LSM_INFO_NWRITE:
-          The third parameter should be of type (int *). The location pointed
-          to by the third parameter is set to the number of 4KB pages written to
-          the database file during the lifetime of this connection.
+        The number of 4KB pages written to the database file during the lifetime of this connection.
         """
         cdef int npages
         self.check(lsm_info(self.db, LSM_INFO_NWRITE, &npages))
@@ -647,10 +645,7 @@ cdef class LSM(object):
 
     cpdef int pages_read(self):
         """
-        LSM_INFO_NREAD:
-          The third parameter should be of type (int *). The location pointed
-          to by the third parameter is set to the number of 4KB pages read from
-          the database file during the lifetime of this connection.
+          The number of 4KB pages read from the database file during the lifetime of this connection.
         """
         cdef int npages
         self.check(lsm_info(self.db, LSM_INFO_NREAD, &npages))
@@ -658,10 +653,7 @@ cdef class LSM(object):
 
     cpdef int checkpoint_size(self):
         """
-        LSM_INFO_CHECKPOINT_SIZE:
-          The third argument should be of type (int *). The location pointed to
-          by this argument is populated with the number of KB written to the
-          database file since the most recent checkpoint.
+        The number of KB written to the database file since the most recent checkpoint.
         """
         cdef int nkb
         self.check(lsm_info(self.db, LSM_INFO_CHECKPOINT_SIZE, &nkb))
@@ -714,15 +706,14 @@ cdef class LSM(object):
         """
         Add a key/value pair to the database.
 
-        Using dictionary APIs
-        ---------------------
+        Rather than calling :py:meth:`~LSM.insert`, you can simply treat your database
+        as a dictionary and use the ``__setitem__`` API:
 
-        Rather than calling `insert()`, you can simply treat your database
-        as a dictionary and use the `__setitem__` API:
+        .. code-block:: python
 
-        # These are equivalent:
-        lsm_db.insert('key', 'value')
-        lsm_db['key'] = 'value'
+            # These are equivalent:
+            lsm_db.insert('key', 'value')
+            lsm_db['key'] = 'value'
         """
         cdef char *c_key = key
         cdef char *c_val = value
@@ -733,38 +724,47 @@ cdef class LSM(object):
             c_val,
             len(value)))
 
+    cpdef update(self, dict values):
+        """
+        Add an arbitrary number of key/value pairs.
+        """
+        cdef basestring key
+        for key in values:
+            self.insert(key, values[key])
+
     cpdef basestring fetch(self, basestring key,
                            int seek_method=LSM_SEEK_EQ):
         """
         Retrieve a value from the database.
 
         If the default seek method is used and the key does not exist, a
-        `KeyError` will be raised.
+        ``KeyError`` will be raised.
 
         The following seek methods can be specified.
 
-        * SEEK_EQ (default): match key based on equality. If no match is found,
-            then a `KeyError` is raised.
-        * SEEK_LE: if the key does not exist, return the largest key in the
-            database that is *smaller* than the given key. If no smaller key
-            exists, then a `KeyError` will be raised.
-        * SEEK_GE: if the key does not exist, return the smallest key in the
-            database that is *larger* than the given key. If no larger key
-            exists, then a `KeyError` will be raised.
+        * ``SEEK_EQ`` (default): match key based on equality. If no match is found,
+                                 then a ``KeyError`` is raised.
+        * ``SEEK_LE``: if the key does not exist, return the largest key in the
+                       database that is *smaller* than the given key. If no smaller key
+                       exists, then a `KeyError` will be raised.
+        * ``SEEK_GE``: if the key does not exist, return the smallest key in the
+                       database that is *larger* than the given key. If no larger key
+                       exists, then a `KeyError` will be raised.
 
-        Using dictionary APIs
-        ---------------------
-
-        Instead of calling `fetch()`, you can simply treat your database
+        Instead of calling :py:meth:`fetch`, you can simply treat your database
         like a dictionary.
 
-        # These are equivalent:
-        val = lsm_db.fetch('key')
-        val = lsm_db['key']
+        Example:
 
-        # You can specify the `seek_method` by passing a tuple:
-        val = lsm_db.fetch('other-key', SEEK_LE)
-        val = lsm_db['other-key', SEEK_LE]
+        .. code-block:: python
+
+            # These are equivalent:
+            val = lsm_db.fetch('key')
+            val = lsm_db['key']
+
+            # You can specify the `seek_method` by passing a tuple:
+            val = lsm_db.fetch('other-key', SEEK_LE)
+            val = lsm_db['other-key', SEEK_LE]
         """
         with self.cursor() as cursor:
             cursor.seek(key, seek_method)
@@ -793,9 +793,6 @@ cdef class LSM(object):
           smaller than the given key (same as SEEK_LE).
         * The end key will be the smallest key in the database that is larger
           than the given key (same as SEEK_GE).
-
-        Examples
-        --------
 
         An example should clarify. Say we have the following data:
 
@@ -826,13 +823,11 @@ cdef class LSM(object):
 
         * (None, '0') -> []
 
-        NOTE:
-
+        .. note::
             If the start key is greater than the end key, lsm-python will
             assume you want the range in reverse order.
 
-        Sorting in Reverse
-        ------------------
+        **Sorting in Reverse**
 
         Examples in descending (reverse) order:
 
@@ -843,7 +838,7 @@ cdef class LSM(object):
         If one of the boundaries is not specified (`None`), then it will start
         at the highest and lowest keys, respectively.
 
-        NOTE:
+        .. note::
 
             If one or both keys is `None` and you wish to fetch in reverse,
             you need to specify a third parameter, `reverse=True`.
@@ -862,31 +857,30 @@ cdef class LSM(object):
 
         * ('0', None, True) -> []
 
-        Using dictionary APIs
-        ---------------------
-
         You can fetch ranges of key/value pairs using Python's dictionary API.
 
-        # These are equivalent:
-        items = lsm_db.fetch_range('2015.01.01', '2015.01.31')
-        items = lsm_db['2015.01.01':'2015.01.31']
+        .. code-block:: python
 
-        # You can omit the start or end to include all values before or
-        # after.
-        items = lsm_db.fetch_range(None, '2014.12.31')
-        items = lsm_db[:'2014.12.31']
+            # These are equivalent:
+            items = lsm_db.fetch_range('2015.01.01', '2015.01.31')
+            items = lsm_db['2015.01.01':'2015.01.31']
 
-        items = lsm_db.fetch_range('2015.01.01', None)
-        items = lsm_db['2015.01.01':]
+            # You can omit the start or end to include all values before or
+            # after.
+            items = lsm_db.fetch_range(None, '2014.12.31')
+            items = lsm_db[:'2014.12.31']
 
-        # If the start value is greater than the end value, then the search
-        # will be done in reverse. However, if either the start or end is
-        # `None`, then the `step` of the slice should be `True`:
-        reverse_items = db.fetch_range('zzz', 'aaa')
-        reverse_items = db['zzz':'aaa']
+            items = lsm_db.fetch_range('2015.01.01', None)
+            items = lsm_db['2015.01.01':]
 
-        dates_reverse = db.fetch_range('2014.12.31', None, reverse=True)
-        dates_reverse = db['2014.12.31'::True]  # Note the second colon.
+            # If the start value is greater than the end value, then the search
+            # will be done in reverse. However, if either the start or end is
+            # `None`, then the `step` of the slice should be `True`:
+            reverse_items = db.fetch_range('zzz', 'aaa')
+            reverse_items = db['zzz':'aaa']
+
+            dates_reverse = db.fetch_range('2014.12.31', None, reverse=True)
+            dates_reverse = db['2014.12.31'::True]  # Note the second colon.
         """
         if reverse and start and end and start < end:
             raise ValueError('"%s" is less than "%s", but reverse was '
@@ -911,14 +905,13 @@ cdef class LSM(object):
         Remove the key from the database. If the key does not exist, no
         exception is raised.
 
-        Using dictionary APIs
-        ---------------------
-
         You can delete keys using Python's dictionary API:
 
-        # These are equivalent:
-        lsm_db.delete('some-key')
-        del lsm_db['some-key']
+        .. code-block:: python
+
+            # These are equivalent:
+            lsm_db.delete('some-key')
+            del lsm_db['some-key']
         """
         cdef char *c_key = key
         self.check(lsm_delete(
@@ -931,14 +924,13 @@ cdef class LSM(object):
         Delete a range of keys, though the start and end keys themselves
         are not deleted.
 
-        Using dictionary APIs
-        ---------------------
-
         You can delete a range of keys using Python's dictionary API:
 
-        # These are equivalent:
-        lsm_db.delete_range('bar', 'foo')
-        del lsm_db['bar':'foo']
+        .. code-block:: python
+
+            # These are equivalent:
+            lsm_db.delete_range('bar', 'foo')
+            del lsm_db['bar':'foo']
         """
         cdef char *c_start = start
         cdef char *c_end = end
@@ -951,7 +943,7 @@ cdef class LSM(object):
 
     def __getitem__(self, key):
         """
-        Dictionary API wrapper for the `fetch()` and `fetch_range()` methods.
+        Dictionary API wrapper for the :py:meth:`fetch` and :py:meth:`fetch_range` methods.
         """
         cdef int seek_method = LSM_SEEK_EQ
         cdef bint reverse
@@ -966,13 +958,13 @@ cdef class LSM(object):
 
     def __setitem__(self, key, value):
         """
-        Dictionary API wrapper for the `insert()` method.
+        Dictionary API wrapper for the :py:meth:`insert` method.
         """
         self.insert(key, value)
 
     def __delitem__(self, key):
         """
-        Dictionary API wrapper for the `delete()` and `delete_range()` methods.
+        Dictionary API wrapper for the :py:meth:`delete` and :py:meth:`delete_range` methods.
         """
         if isinstance(key, slice):
             self.delete_range(key.start, key.stop)
@@ -1111,23 +1103,27 @@ cdef class LSM(object):
 
         Example:
 
-        with lsm_db.transaction() as txn:
-            lsm_db['k1'] = 'v1'
+        .. code-block:: python
 
-        with lsm_db.transaction() as txn:
-            lsm_db['k1'] = 'v1-1'
-            txn.rollback()
+            with lsm_db.transaction() as txn:
+                lsm_db['k1'] = 'v1'
 
-        assert lsm_db['k1'] == 'v1'
+            with lsm_db.transaction() as txn:
+                lsm_db['k1'] = 'v1-1'
+                txn.rollback()
 
-        You can also use the `transaction()` method as a decorator. If the
+            assert lsm_db['k1'] == 'v1'
+
+        You can also use the :py:meth:`transaction` method as a decorator. If the
         function returns normally, the transaction is committed, otherwise
         it is rolled back.
 
-        @lsm_db.transaction()
-        def transfer_funds(from_account, to_account, amount):
-            # transfer money...
-            return
+        .. code-block:: python
+
+            @lsm_db.transaction()
+            def transfer_funds(from_account, to_account, amount):
+                # transfer money...
+                return
         """
         return Transaction(self)
 
@@ -1136,19 +1132,21 @@ cdef class LSM(object):
         Create a cursor and return it as a context manager. After the wrapped
         block, the cursor is closed.
 
-        If `reverse` is `True`, then the cursor will iterate over keys in
+        If ``reverse`` is ``True``, then the cursor will iterate over keys in
         descending order.
 
-        with lsm_db.cursor() as cursor:
-            for key, value in cursor.fetch_range('2015.01.01', '2015.01.31'):
-                # do something with data...
+        .. code-block:: python
 
-        with lsm_db.cursor(reverse=True) as cursor:
-            for key, value in cursor.fetch_range('2015.01.31', '2015.01.01'):
-                # data is now ordered descending order.
+            with lsm_db.cursor() as cursor:
+                for key, value in cursor.fetch_range('2015.01.01', '2015.01.31'):
+                    # do something with data...
 
-        NOTE:
-            In general the `cursor()` context manager should be used as it
+            with lsm_db.cursor(reverse=True) as cursor:
+                for key, value in cursor.fetch_range('2015.01.31', '2015.01.01'):
+                    # data is now ordered descending order.
+
+        .. note::
+            In general the :py:meth:`cursor` context manager should be used as it
             ensures cursors are properly cleaned up when you are done using
             them.
 

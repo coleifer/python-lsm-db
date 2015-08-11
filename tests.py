@@ -54,6 +54,10 @@ class TestLSM(BaseTestLSM):
         self.assertEqual(self.db['k22', lsm.SEEK_GE], 'v3')
         self.assertEqual(self.db['k22', lsm.SEEK_LE], 'v2')
 
+        self.db.update({'foo': 'bar', 'nug': 'nizer'})
+        self.assertEqual(self.db['foo'], 'bar')
+        self.assertEqual(self.db['nug'], 'nizer')
+
     def test_keys_values(self):
         for i in range(1, 5):
             self.db['k%s' % i] = 'v%s' % i
