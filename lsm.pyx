@@ -634,6 +634,39 @@ cdef class LSM(object):
         """
         self.check(lsm_config(self.db, LSM_CONFIG_READONLY, &readonly))
 
+    cpdef int pages_written(self):
+        """
+        LSM_INFO_NWRITE:
+          The third parameter should be of type (int *). The location pointed
+          to by the third parameter is set to the number of 4KB pages written to
+          the database file during the lifetime of this connection.
+        """
+        cdef int npages
+        self.check(lsm_info(self.db, LSM_INFO_NWRITE, &npages))
+        return npages
+
+    cpdef int pages_read(self):
+        """
+        LSM_INFO_NREAD:
+          The third parameter should be of type (int *). The location pointed
+          to by the third parameter is set to the number of 4KB pages read from
+          the database file during the lifetime of this connection.
+        """
+        cdef int npages
+        self.check(lsm_info(self.db, LSM_INFO_NREAD, &npages))
+        return npages
+
+    cpdef int checkpoint_size(self):
+        """
+        LSM_INFO_CHECKPOINT_SIZE:
+          The third argument should be of type (int *). The location pointed to
+          by this argument is populated with the number of KB written to the
+          database file since the most recent checkpoint.
+        """
+        cdef int nkb
+        self.check(lsm_info(self.db, LSM_INFO_CHECKPOINT_SIZE, &nkb))
+        return nkb
+
     cpdef check(self, int rc):
         """Check the return value of a call to an LSM function."""
         if rc == LSM_OK:

@@ -810,5 +810,33 @@ class TestLSMOptions(BaseTestLSM):
         self.assertEqual(keys, expected)
 
 
+class TestLSMInfo(BaseTestLSM):
+    def test_lsm_info(self):
+        self.db.close()
+
+        # Page size is 1KB.
+        db = lsm.LSM(self.filename, page_size=1024)
+        db.set_auto_checkpoint(4)  # Every 4KB.
+
+        w0 = db.pages_written()
+        r0 = db.pages_read()
+        c0 = db.checkpoint_size()
+        self.assertEqual(w0, 0)
+        self.assertEqual(r0, 0)
+        self.assertEqual(c0, 0)
+
+        data = '0' * 1024
+        for i in range(1024):
+            db[str(i)] = data
+            r = db[str(i)]
+
+        w1 = db.pages_written()
+        r1 = db.pages_read()
+        c1 = db.checkpoint_size()
+        self.assertEqual(w1, 240)
+        self.assertEqual(r1, 0)  # Not sure why not increasing...
+        self.assertEqual(c1, 956)
+
+
 if __name__ == '__main__':
     unittest.main(argv=sys.argv)
