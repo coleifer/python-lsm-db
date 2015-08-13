@@ -78,7 +78,7 @@ By default when you attempt to look up a key, ``lsm-db`` will search for an exac
 
 ### Slices and Iteration
 
-The database can be iterated through directly, or sliced. When you are slicing the database the start and end keys need not exist -- ``lsm-db`` will find the closest key (details can be found in the [LSM.fetch](http://lsm-db.readthedocs.org/en/latest/api.html#lsm.LSM.fetch) documentation).
+The database can be iterated through directly, or sliced. When you are slicing the database the start and end keys need not exist -- ``lsm-db`` will find the closest key (details can be found in the [LSM.fetch_range()](http://lsm-db.readthedocs.org/en/latest/api.html#lsm.LSM.fetch_range) documentation).
 
 ```python
 
