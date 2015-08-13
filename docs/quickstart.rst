@@ -5,7 +5,7 @@ Quick-start
 
 Below is a sample interactive console session designed to show some of the basic features and functionality of the ``lsm-db`` Python library. Also check out the :ref:`API documentation <api>`.
 
-To begin, instantiate a :py:class:`LSM` object, specifying a path to a database file.
+To begin, instantiate a :py:class:`lsm.LSM` object, specifying a path to a database file.
 
 .. code-block:: pycon
 
@@ -55,14 +55,14 @@ By default when you attempt to look up a key, ``lsm-db`` will search for an exac
 
 :py:class:`LSM` supports other common dictionary methods such as:
 
-* :py:meth:`~LSM.keys`
-* :py:meth:`~LSM.values`
-* :py:meth:`~LSM.update`
+* :py:meth:`~lsm.LSM.keys`
+* :py:meth:`~lsm.LSM.values`
+* :py:meth:`~lsm.LSM.update`
 
 Slices and Iteration
 --------------------
 
-The database can be iterated through directly, or sliced. When you are slicing the database the start and end keys need not exist -- ``lsm-db`` will find the closest key (details can be found in the :py:meth:`LSM.fetch` documentation).
+The database can be iterated through directly, or sliced. When you are slicing the database the start and end keys need not exist -- ``lsm-db`` will find the closest key (details can be found in the :py:meth:`~lsm.LSM.fetch` documentation).
 
 .. code-block:: pycon
 
@@ -142,12 +142,12 @@ While slicing may cover most use-cases, for finer-grained control you can use cu
     [('k0', '0'), ('k1', '1'), ('k2', '2'), ('k3', '3')]
 
 .. note::
-    It is very important to close a cursor when you are through using it. For this reason, it is recommended you use the :py:meth:`LSM.cursor` context-manager, which ensures the cursor is closed properly.
+    It is very important to close a cursor when you are through using it. For this reason, it is recommended you use the :py:meth:`~lsm.LSM.cursor` context-manager, which ensures the cursor is closed properly.
 
 Transactions
 ------------
 
-``lsm-db`` supports nested transactions. The simplest way to use transactions is with the :py:meth:`LSM.transaction` method, which doubles as a context-manager or decorator.
+``lsm-db`` supports nested transactions. The simplest way to use transactions is with the :py:meth:`~lsm.LSM.transaction` method, which doubles as a context-manager or decorator.
 
 .. code-block:: pycon
 
@@ -181,7 +181,7 @@ You can commit or roll-back transactions part-way through a wrapped block:
     True           <- Return value of call to rollback().
     outer txn      <- Printed after rollback.
 
-If you like, you can also explicitly call :py:meth:`~LSM.begin`, :py:meth:`~LSM.commit`, and :py:meth:`~LSM.rollback`:
+If you like, you can also explicitly call :py:meth:`~lsm.LSM.begin`, :py:meth:`~lsm.LSM.commit`, and :py:meth:`~lsm.LSM.rollback`:
 
 .. code-block:: pycon
 
