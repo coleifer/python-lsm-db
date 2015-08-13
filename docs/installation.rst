@@ -9,11 +9,11 @@ You can use ``pip`` to install ``lsm-db``:
 
     pip install lsm-db
 
-The project is hosted at https://github.com/coleifer/lsm-db and can be installed from source:
+The project is hosted at https://github.com/coleifer/python-lsm-db and can be installed from source:
 
 .. code-block:: console
 
-    git clone https://github.com/coleifer/lsm-db
+    git clone https://github.com/coleifer/python-lsm-db
     cd lsm-db
     python setup.py build
     python setup.py install

@@ -18,10 +18,10 @@ Features:
 * Thread-safe.
 
 
-The source for Python lsm-db is `hosted on GitHub <https://github.com/coleifer/lsm-db>`_.
+The source for Python lsm-db is `hosted on GitHub <https://github.com/coleifer/python-lsm-db>`_.
 
 .. note::
-  If you encounter any bugs in the library, please `open an issue <https://github.com/coleifer/lsm-db/issues/new>`_, including a description of the bug and any related traceback.
+  If you encounter any bugs in the library, please `open an issue <https://github.com/coleifer/python-lsm-db/issues/new>`_, including a description of the bug and any related traceback.
 
 Contents:
 
