@@ -22,7 +22,7 @@ Below is a sample interactive console session designed to show some of the basic
 
 To begin, instantiate a `LSM` object, specifying a path to a database file.
 
-```pycon
+```python
 
 >>> from lsm import LSM
 >>> db = LSM('test.ldb')
@@ -32,7 +32,7 @@ To begin, instantiate a `LSM` object, specifying a path to a database file.
 
 `lsm-db` is a key/value store, and has a dictionary-like API:
 
-```pycon
+```python
 
 >>> db['foo'] = 'bar'
 >>> print db['foo']
@@ -61,7 +61,7 @@ KeyError: 'k3'
 
 By default when you attempt to look up a key, ``lsm-db`` will search for an exact match. You can also search for the closest key, if the specific key you are searching for does not exist:
 
-```pycon
+```python
 
 >>> from lsm import SEEK_LE, SEEK_GE
 >>> db['k1xx', SEEK_LE]  # Here we will match "k1".
@@ -80,7 +80,7 @@ By default when you attempt to look up a key, ``lsm-db`` will search for an exac
 
 The database can be iterated through directly, or sliced. When you are slicing the database the start and end keys need not exist -- ``lsm-db`` will find the closest key (details can be found in the [LSM.fetch](http://lsm-db.readthedocs.org/en/latest/api.html#lsm.LSM.fetch) documentation).
 
-```pycon
+```python
 
 >>> [item for item in db]
 [('foo', 'bar'), ('k0', '0'), ('k1', '1'), ('k2', '2')]
@@ -94,7 +94,7 @@ The database can be iterated through directly, or sliced. When you are slicing t
 
 You can use open-ended slices. If the lower- or upper-bound is outside the range of keys an empty list is returned.
 
-```pycon
+```python
 
 >>> list(db['k0':])
 [('k0', '0'), ('k1', '1'), ('k2', '2')]
@@ -108,7 +108,7 @@ You can use open-ended slices. If the lower- or upper-bound is outside the range
 
 To retrieve keys in reverse order, simply use a higher key as the first parameter of your slice. If you are retrieving an open-ended slice, you can specify ``True`` as the ``step`` parameter of the slice.
 
-```pycon
+```python
 
 >>> list(db['k1':'aaa'])  # Since 'k1' > 'aaa', keys are retrieved in reverse:
 [('k1', '1'), ('k0', '0'), ('foo', 'bar')]
@@ -119,7 +119,7 @@ To retrieve keys in reverse order, simply use a higher key as the first paramete
 
 You can also **delete** slices of keys, but note that the delete **will not** include the keys themselves:
 
-```pycon
+```python
 
 >>> del db['k0':'k99']
 
@@ -131,7 +131,7 @@ You can also **delete** slices of keys, but note that the delete **will not** in
 
 While slicing may cover most use-cases, for finer-grained control you can use cursors for traversing records.
 
-```pycon
+```python
 
 >>> with db.cursor() as cursor:
 ...     for key, value in cursor:
@@ -167,7 +167,7 @@ It is very important to close a cursor when you are through using it. For this r
 
 ``lsm-db`` supports nested transactions. The simplest way to use transactions is with the `LSM.transaction()` method, which doubles as a context-manager or decorator.
 
-```pycon
+```python
 
 >>> with db.transaction() as txn:
 ...     db['k1'] = '1-mod'
@@ -182,7 +182,7 @@ True
 
 You can commit or roll-back transactions part-way through a wrapped block:
 
-```pycon
+```python
 
 >>> with db.transaction() as txn:
 ...    db['k1'] = 'outer txn'
@@ -203,7 +203,7 @@ outer txn      <- Printed after rollback.
 
 If you like, you can also explicitly call `LSM.begin()`, `LSM.commit()`, and `LSM.rollback()`.
 
-```pycon
+```python
 
 >>> db.begin()
 >>> db['foo'] = 'baze'
