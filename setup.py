@@ -1,10 +1,22 @@
 import os
 
 from distutils.core import setup, Extension
-from Cython.Build import cythonize
+try:
+    from Cython.Build import cythonize
+except ImportError:
+    import warnings
+    cython_installed = False
+    warnings.warn('Cython not installed, using pre-generated C source file.')
+else:
+    cython_installed = True
 
 
-python_source = 'lsm.pyx'
+if cython_installed:
+    python_source = 'lsm.pyx'
+else:
+    python_source = 'lsm.c'
+    cythonize = lambda obj: [obj]
+
 library_source = 'src/sqlite4.c'
 
 lsm_extension = Extension(
@@ -13,7 +25,7 @@ lsm_extension = Extension(
 
 setup(
     name='lsm-db',
-    version='0.1.1',
+    version='0.1.2',
     description='Python bindings for the SQLite4 LSM database.',
     author='Charles Leifer',
     author_email='',
