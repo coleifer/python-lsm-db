@@ -782,12 +782,15 @@ cdef class LSM(object):
             self.insert(key, values[key])
 
     cpdef basestring fetch(self, basestring key,
-                           int seek_method=LSM_SEEK_EQ):
+                           int seek_method=LSM_SEEK_EQ,
+                           Cursor cursor=None):
         """
         Retrieve a value from the database.
 
         :param str key: The key to retrieve.
         :param int seek_method: Instruct the database how to match the key.
+        :param Cursor cursor: an open :py:class:`Cursor` to use to perform
+            the fetch. If not provided, a cursor will be created.
         :raises: ``KeyError`` if a matching key cannot be found. See below
             for more details.
 
@@ -819,9 +822,13 @@ cdef class LSM(object):
                 val = lsm_db.fetch('other-key', SEEK_LE)
                 val = lsm_db['other-key', SEEK_LE]
         """
-        with self.cursor() as cursor:
+        if cursor is not None:
             cursor.seek(key, seek_method)
             return cursor.value()
+        else:
+            with self.cursor() as cursor:
+                cursor.seek(key, seek_method)
+                return cursor.value()
 
     def fetch_range(self, start, end, reverse=False):
         """
