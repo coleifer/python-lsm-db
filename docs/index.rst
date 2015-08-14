@@ -3,6 +3,9 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+python lsm-db
+=============
+
 .. image:: http://media.charlesleifer.com/blog/photos/lsm.png
 
 Fast Python bindings for `SQLite4's LSM key/value store <http://www.sqlite.org/src4/doc/trunk/www/lsmusr.wiki>`_.
