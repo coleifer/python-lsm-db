@@ -782,15 +782,12 @@ cdef class LSM(object):
             self.insert(key, values[key])
 
     cpdef basestring fetch(self, basestring key,
-                           int seek_method=LSM_SEEK_EQ,
-                           Cursor cursor=None):
+                           int seek_method=LSM_SEEK_EQ):
         """
         Retrieve a value from the database.
 
         :param str key: The key to retrieve.
         :param int seek_method: Instruct the database how to match the key.
-        :param Cursor cursor: an open :py:class:`Cursor` to use to perform
-            the fetch. If not provided, a cursor will be created.
         :raises: ``KeyError`` if a matching key cannot be found. See below
             for more details.
 
@@ -822,13 +819,26 @@ cdef class LSM(object):
                 val = lsm_db.fetch('other-key', SEEK_LE)
                 val = lsm_db['other-key', SEEK_LE]
         """
-        if cursor is not None:
-            cursor.seek(key, seek_method)
-            return cursor.value()
-        else:
-            with self.cursor() as cursor:
-                cursor.seek(key, seek_method)
-                return cursor.value()
+        cdef:
+            lsm_cursor *pcursor = <lsm_cursor *>0
+            char *c_key = key
+            char *v
+            int rc
+            int vlen
+
+        # Use low-level cursor APIs for performance, since this method could
+        # be a hot-spot. Another idea is to use a cursor cache or a shared
+        # cursor context. Or the method could accept a cursor as a parameter.
+        lsm_csr_open(self.db, &pcursor)
+        try:
+            rc = lsm_csr_seek(pcursor, <void *>c_key, len(key), seek_method)
+            if rc == LSM_OK and lsm_csr_valid(pcursor):
+                rc = lsm_csr_value(pcursor, <const void **>(&v), &vlen)
+                if rc == LSM_OK:
+                    return str(v[:vlen])
+            raise KeyError(key)
+        finally:
+            lsm_csr_close(pcursor)
 
     def fetch_range(self, start, end, reverse=False):
         """
