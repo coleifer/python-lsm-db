@@ -484,7 +484,10 @@ class TestCursors(BaseTestLSM):
             try:
                 cursor.next()
             except Exception as exc:
-                self.assertEqual(exc.message, 'Misuse: 21')
+                if (sys.version_info > (3,0)):
+                    self.assertEqual(exc.args[0], 'Misuse: 21')
+                else:
+                    self.assertEqual(exc.message, 'Misuse: 21')
             else:
                 raise AssertionError('Mis-use exception not raised.')
 
@@ -505,7 +508,10 @@ class TestCursors(BaseTestLSM):
             try:
                 cursor.previous()
             except Exception as exc:
-                self.assertEqual(exc.message, 'Misuse: 21')
+                if (sys.version_info > (3,0)):
+                    self.assertEqual(exc.args[0], 'Misuse: 21')
+                else:
+                    self.assertEqual(exc.message, 'Misuse: 21')
             else:
                 raise AssertionError('Mis-use exception not raised.')
 
