@@ -417,6 +417,13 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_cmp(lsm_cursor *pCsr, const void *pKey, int nKey, int *piRes)
 
 
+def lt3(a, b)
+    """Needed for Python 3.x
+    """
+    return ((a is None and b is not None) or 
+            (a is not None and b is not None and a < b))
+            
+
 cdef class LSM(object):
     """
     Python wrapper for SQLite4's LSM implementation.
@@ -485,7 +492,8 @@ cdef class LSM(object):
             self.db = <lsm_db *>0
             self.check(lsm_new(NULL, &self.db))
 
-        self.check(lsm_open(self.db, self.filename))
+        b_filename = self.filename.encode()
+        self.check(lsm_open(self.db, b_filename))
         self.is_open = True
         self.was_opened = True
         return True
@@ -759,14 +767,16 @@ cdef class LSM(object):
                 lsm_db.insert('key', 'value')
                 lsm_db['key'] = 'value'
         """
-        cdef char *c_key = key
-        cdef char *c_val = value
+        b_key = key.encode()
+        cdef char *c_key = b_key
+        b_value = value.encode()
+        cdef char *c_val = b_value
         self.check(lsm_insert(
             self.db,
             c_key,
-            len(key),
+            len(b_key),
             c_val,
-            len(value)))
+            len(b_value)))
 
     cpdef update(self, dict values):
         """
@@ -820,8 +830,9 @@ cdef class LSM(object):
                 val = lsm_db['other-key', SEEK_LE]
         """
         cdef:
+            b_key = key.encode()
             lsm_cursor *pcursor = <lsm_cursor *>0
-            char *c_key = key
+            char *c_key = b_key
             char *v
             int rc
             int vlen
@@ -835,7 +846,7 @@ cdef class LSM(object):
             if rc == LSM_OK and lsm_csr_valid(pcursor):
                 rc = lsm_csr_value(pcursor, <const void **>(&v), &vlen)
                 if rc == LSM_OK:
-                    return str(v[:vlen])
+                    return str(v[:vlen].decode())
             raise KeyError(key)
         finally:
             lsm_csr_close(pcursor)
@@ -977,11 +988,11 @@ cdef class LSM(object):
             >>> db['0'::True]
             []
         """
-        if reverse and start and end and start < end:
+        if reverse and start is not None and end is not None and start < end:
             raise ValueError('"%s" is less than "%s", but reverse was '
                              'explicitly selected.' % (start, end))
 
-        if start and end and start > end:
+        if start is not None and end is not None and start > end:
             reverse = True
 
         try:
@@ -1010,11 +1021,12 @@ cdef class LSM(object):
                 lsm_db.delete('some-key')
                 del lsm_db['some-key']
         """
-        cdef char *c_key = key
+        b_key = key.encode()
+        cdef char *c_key = b_key
         self.check(lsm_delete(
             self.db,
             c_key,
-            len(key)))
+            len(b_key)))
 
     cpdef delete_range(self, basestring start, basestring end):
         """
@@ -1042,14 +1054,16 @@ cdef class LSM(object):
             >>> print list(db)
             [('d', 'D'), ('e', 'E'), ('f', 'F')]
         """
-        cdef char *c_start = start
-        cdef char *c_end = end
+        b_start = start.encode()
+        cdef char *c_start = b_start
+        b_end = end.encode()
+        cdef char *c_end = b_end
         self.check(lsm_delete_range(
             self.db,
             c_start,
-            len(start),
+            len(b_start),
             c_end,
-            len(end)))
+            len(b_end)))
 
     def __getitem__(self, key):
         """
@@ -1438,10 +1452,11 @@ cdef class Cursor(object):
         """
         Compare the given key with key at the cursor's current position.
         """
-        cdef char *c_key = key
+        b_key = key.encode()
+        cdef char *c_key = b_key
         cdef int res
         if nlen == 0:
-            nlen = len(key)
+            nlen = len(b_key)
         rc = lsm_csr_cmp(
             self.cursor,
             c_key,
@@ -1468,12 +1483,13 @@ cdef class Cursor(object):
 
         http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki#lsm_csr_seek
         """
-        cdef char *c_key = key
+        b_key = key.encode()
+        cdef char *c_key = b_key
         cdef int rc
         self.lsm.check(lsm_csr_seek(
             self.cursor,
             <void *>c_key,
-            len(key),
+            len(b_key),
             method))
         if not self.is_valid():
             raise KeyError(key)
@@ -1565,11 +1581,11 @@ cdef class Cursor(object):
         cdef int is_reverse = self._reverse
         cdef int seek_method = is_reverse and LSM_SEEK_LE or LSM_SEEK_GE
 
-        if (is_reverse and start < end) or (not is_reverse and start > end):
-            if start and end:
+        if (is_reverse and lt3(start, end)) or (not is_reverse and lt3(end, start)):
+            if start is not None and end is not None:
                 start, end = end, start
 
-        if not start:
+        if start is None:
             if is_reverse:
                 self.last()
             else:
@@ -1588,14 +1604,14 @@ cdef class Cursor(object):
         cdef char *k
         cdef int klen
         lsm_csr_key(self.cursor, <const void **>(&k), &klen)
-        return str(k[:klen])
+        return str(k[:klen].decode())
 
     cpdef basestring value(self):
         """Return the value at the cursor's current position."""
         cdef char *v
         cdef int vlen
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
-        return str(v[:vlen])
+        return str(v[:vlen].decode())
 
     def keys(self):
         """Return a generator that successively yields keys."""
