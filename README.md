@@ -12,6 +12,11 @@ Features:
 * Data is durable in the face of application or power failure.
 * Thread-safe.
 
+Limitations:
+
+* Python 2.x only, there is currently no support for Py3k.
+* Not tested on Windoze.
+
 The source for Python lsm-db is [hosted on GitHub](https://github.com/coleifer/python-lsm-db).
 
 If you encounter any bugs in the library, please [open an issue](https://github.com/coleifer/python-lsm-db/issues/new), including a description of the bug and any related traceback.
