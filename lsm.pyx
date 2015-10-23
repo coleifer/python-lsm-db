@@ -1,3 +1,4 @@
+import struct
 from libc.stdlib cimport free, malloc
 
 
@@ -1179,6 +1180,19 @@ cdef class LSM(object):
         with self.cursor(reverse) as cursor:
             for value in cursor.values():
                 yield value
+
+    cpdef int incr(self, basestring key):
+        cdef basestring value
+        cdef int ivalue
+        try:
+            value = self[key]
+        except KeyError:
+            ivalue = 0
+        else:
+            ivalue = struct.unpack('>q', value)[0]
+        ivalue += 1
+        self[key] = struct.pack('>q', ivalue)
+        return ivalue
 
     cpdef flush(self):
         """Flush the in-memory tree to disk, creating a new segment."""

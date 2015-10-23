@@ -299,6 +299,11 @@ class TestLSM(BaseTestLSM):
             ('k1', 'v1'),
         ])
 
+    def test_incr(self):
+        self.assertEqual(self.db.incr('i0'), 1)
+        self.assertEqual(self.db.incr('i0'), 2)
+        self.assertEqual(self.db.incr('i0'), 3)
+
 
 class TestTransactions(BaseTestLSM):
     def assertDepth(self, value):
