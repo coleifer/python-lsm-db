@@ -11,10 +11,10 @@ Features:
 * On-disk database stored in a single file.
 * Data is durable in the face of application or power failure.
 * Thread-safe.
+* Python 2.x and 3.x
 
 Limitations:
 
-* Python 2.x only, there is currently no support for Py3k.
 * Not tested on Windoze.
 
 The source for Python lsm-db is [hosted on GitHub](https://github.com/coleifer/python-lsm-db).

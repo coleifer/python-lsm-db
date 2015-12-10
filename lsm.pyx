@@ -1,5 +1,18 @@
 import struct
+import sys
+
 from libc.stdlib cimport free, malloc
+
+try:
+    from os import fsencode
+except ImportError:
+    try:
+        from sys import getfilesystemencoding as _getfsencoding
+    except ImportError:
+        _fsencoding = 'utf-8'
+    else:
+        _fsencoding = _getfsencoding()
+    fsencode = lambda s: s.encode(_fsencoding)
 
 
 cdef extern from "src/lsm.h":
@@ -418,6 +431,15 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_cmp(lsm_cursor *pCsr, const void *pKey, int nKey, int *piRes)
 
 
+cdef bytes encode(obj):
+    if isinstance(obj, unicode):
+        return obj.encode('utf-8')
+    return bytes(obj)
+
+
+cdef bint IS_PY3K = sys.version_info[0] == 3
+
+
 cdef class LSM(object):
     """
     Python wrapper for SQLite4's LSM implementation.
@@ -426,9 +448,10 @@ cdef class LSM(object):
     """
     cdef:
         lsm_db *db
-        readonly basestring filename
+        readonly filename
         readonly bint is_open
         bint open_database
+        bytes encoded_filename
         readonly int transaction_depth
         bint was_opened
 
@@ -458,6 +481,10 @@ cdef class LSM(object):
             access the database. Default is `True`.
         """
         self.filename = filename
+        if isinstance(filename, unicode):
+            self.encoded_filename = fsencode(filename)
+        else:
+            self.encoded_filename = bytes(filename)
         if page_size:
             self.set_page_size(page_size)
         if block_size:
@@ -486,7 +513,7 @@ cdef class LSM(object):
             self.db = <lsm_db *>0
             self.check(lsm_new(NULL, &self.db))
 
-        self.check(lsm_open(self.db, self.filename))
+        self.check(lsm_open(self.db, self.encoded_filename))
         self.is_open = True
         self.was_opened = True
         return True
@@ -743,7 +770,7 @@ cdef class LSM(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    cpdef insert(self, basestring key, basestring value):
+    cpdef insert(self, key, value):
         """
         Insert a key/value pair to the database. If the key exists, the
         previous value will be overwritten.
@@ -760,14 +787,13 @@ cdef class LSM(object):
                 lsm_db.insert('key', 'value')
                 lsm_db['key'] = 'value'
         """
-        cdef char *c_key = key
-        cdef char *c_val = value
+        cdef bytes bkey = encode(key), bvalue = encode(value)
         self.check(lsm_insert(
             self.db,
-            c_key,
-            len(key),
-            c_val,
-            len(value)))
+            <char *>bkey,
+            len(bkey),
+            <char *>bvalue,
+            len(bvalue)))
 
     cpdef update(self, dict values):
         """
@@ -778,12 +804,10 @@ cdef class LSM(object):
 
         :param dict values: A dictionary of key/value pairs.
         """
-        cdef basestring key
         for key in values:
             self.insert(key, values[key])
 
-    cpdef basestring fetch(self, basestring key,
-                           int seek_method=LSM_SEEK_EQ):
+    cpdef fetch(self, key, int seek_method=LSM_SEEK_EQ):
         """
         Retrieve a value from the database.
 
@@ -822,7 +846,8 @@ cdef class LSM(object):
         """
         cdef:
             lsm_cursor *pcursor = <lsm_cursor *>0
-            char *c_key = key
+            bytes bkey = encode(key)
+            char *c_key = bkey
             char *v
             int rc
             int vlen
@@ -832,11 +857,17 @@ cdef class LSM(object):
         # cursor context. Or the method could accept a cursor as a parameter.
         lsm_csr_open(self.db, &pcursor)
         try:
-            rc = lsm_csr_seek(pcursor, <void *>c_key, len(key), seek_method)
+            rc = lsm_csr_seek(pcursor, <void *>c_key, len(bkey), seek_method)
             if rc == LSM_OK and lsm_csr_valid(pcursor):
                 rc = lsm_csr_value(pcursor, <const void **>(&v), &vlen)
                 if rc == LSM_OK:
-                    return str(v[:vlen])
+                    value = v[:vlen]
+                    if IS_PY3K:
+                        try:
+                            return value.decode('utf-8')
+                        except UnicodeDecodeError:
+                            pass
+                    return value
             raise KeyError(key)
         finally:
             lsm_csr_close(pcursor)
@@ -996,7 +1027,7 @@ cdef class LSM(object):
         finally:
             cursor.close()
 
-    cpdef delete(self, basestring key):
+    cpdef delete(self, key):
         """
         Remove the specified key and value from the database. If the key does
         not exist, no exception is raised.
@@ -1011,13 +1042,13 @@ cdef class LSM(object):
                 lsm_db.delete('some-key')
                 del lsm_db['some-key']
         """
-        cdef char *c_key = key
+        cdef bytes bkey = encode(key)
         self.check(lsm_delete(
             self.db,
-            c_key,
-            len(key)))
+            <char *>bkey,
+            len(bkey)))
 
-    cpdef delete_range(self, basestring start, basestring end):
+    cpdef delete_range(self, start, end):
         """
         Delete a range of keys, though the start and end keys themselves
         are not deleted.
@@ -1043,14 +1074,13 @@ cdef class LSM(object):
             >>> print list(db)
             [('d', 'D'), ('e', 'E'), ('f', 'F')]
         """
-        cdef char *c_start = start
-        cdef char *c_end = end
+        cdef bytes bstart = encode(start), bend = encode(end)
         self.check(lsm_delete_range(
             self.db,
-            c_start,
-            len(start),
-            c_end,
-            len(end)))
+            <char *>bstart,
+            len(bstart),
+            <char *>bend,
+            len(bend)))
 
     def __getitem__(self, key):
         """
@@ -1161,8 +1191,6 @@ cdef class LSM(object):
         :param bool reverse: Return the keys in reverse order.
         :rtype: generator
         """
-        cdef basestring key
-
         with self.cursor(reverse) as cursor:
             for key in cursor.keys():
                 yield key
@@ -1175,17 +1203,15 @@ cdef class LSM(object):
         :param bool reverse: Return the values in reverse key-order.
         :rtype: generator
         """
-        cdef basestring key
-
         with self.cursor(reverse) as cursor:
             for value in cursor.values():
                 yield value
 
-    cpdef int incr(self, basestring key):
-        cdef basestring value
+    cpdef int incr(self, key):
+        cdef bytes value
         cdef int ivalue
         try:
-            value = self[key]
+            value = encode(self[key])
         except KeyError:
             ivalue = 0
         else:
@@ -1431,7 +1457,6 @@ cdef class Cursor(object):
 
     def __next__(self):
         cdef int rc
-        cdef basestring key, value
 
         if self._consumed:
             raise StopIteration
@@ -1448,23 +1473,23 @@ cdef class Cursor(object):
 
         return (key, value)
 
-    cpdef int compare(self, basestring key, int nlen=0):
+    cpdef int compare(self, key, int nlen=0):
         """
         Compare the given key with key at the cursor's current position.
         """
-        cdef char *c_key = key
+        cdef bytes bkey = encode(key)
         cdef int res
         if nlen == 0:
-            nlen = len(key)
+            nlen = len(bkey)
         rc = lsm_csr_cmp(
             self.cursor,
-            c_key,
+            <char *>bkey,
             nlen,
             &res)
         self.lsm.check(rc)
         return res
 
-    cpdef seek(self, basestring key, int method=LSM_SEEK_EQ):
+    cpdef seek(self, key, int method=LSM_SEEK_EQ):
         """
         Seek to the given key using the specified matching method. If the
         operation did not find a valid key, then a ``KeyError`` will be raised.
@@ -1482,12 +1507,14 @@ cdef class Cursor(object):
 
         http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki#lsm_csr_seek
         """
-        cdef char *c_key = key
-        cdef int rc
+        cdef:
+            bytes bkey = encode(key)
+            char *c_key = bkey
+            int rc
         self.lsm.check(lsm_csr_seek(
             self.cursor,
-            <void *>c_key,
-            len(key),
+            <void *>c_key,  # For some reason a void ptr?
+            len(bkey),
             method))
         if not self.is_valid():
             raise KeyError(key)
@@ -1579,7 +1606,11 @@ cdef class Cursor(object):
         cdef int is_reverse = self._reverse
         cdef int seek_method = is_reverse and LSM_SEEK_LE or LSM_SEEK_GE
 
-        if (is_reverse and start < end) or (not is_reverse and start > end):
+        # py3k
+        s_lt_e = (start and end and start < end) or not start
+        s_gt_e = (start and end and start > end) or not end
+
+        if (is_reverse and s_lt_e) or (not is_reverse and s_gt_e):
             if start and end:
                 start, end = end, start
 
@@ -1597,19 +1628,31 @@ cdef class Cursor(object):
         for key, value in self.fetch_until(end):
             yield (key, value)
 
-    cpdef basestring key(self):
+    cpdef key(self):
         """Return the key at the cursor's current position."""
         cdef char *k
         cdef int klen
         lsm_csr_key(self.cursor, <const void **>(&k), &klen)
-        return str(k[:klen])
+        value = k[:klen]
+        if IS_PY3K:
+            try:
+                value = value.decode('utf-8')
+            except UnicodeDecodeError:
+                pass
+        return value
 
-    cpdef basestring value(self):
+    cpdef value(self):
         """Return the value at the cursor's current position."""
         cdef char *v
         cdef int vlen
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
-        return str(v[:vlen])
+        value = v[:vlen]
+        if IS_PY3K:
+            try:
+                value = value.decode('utf-8')
+            except UnicodeDecodeError:
+                pass
+        return value
 
     def keys(self):
         """Return a generator that successively yields keys."""
