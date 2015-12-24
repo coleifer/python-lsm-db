@@ -1,3 +1,4 @@
+import glob
 import os
 
 from distutils.core import setup, Extension
@@ -17,11 +18,10 @@ else:
     python_source = 'lsm.c'
     cythonize = lambda obj: [obj]
 
-library_source = 'src/sqlite4.c'
-
+library_source = glob.glob('src/*.c')
 lsm_extension = Extension(
     'lsm',
-    sources=[python_source, library_source])
+    sources=[python_source] + library_source)
 
 setup(
     name='lsm-db',

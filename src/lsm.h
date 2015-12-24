@@ -15,7 +15,6 @@
 #ifndef _LSM_H
 #define _LSM_H
 #include <stddef.h>
-#include "sqlite4.h" /* for sqlite4_size_t */
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -70,10 +69,10 @@ struct lsm_env {
   int (*xShmUnmap)(lsm_file*, int);
   /****** memory allocation ****************************************/
   void *pMemCtx;
-  void *(*xMalloc)(lsm_env*, int);            /* malloc(3) function */
-  void *(*xRealloc)(lsm_env*, void *, int);   /* realloc(3) function */
-  void (*xFree)(lsm_env*, void *);            /* free(3) function */
-  sqlite4_size_t (*xSize)(lsm_env*, void *);  /* xSize function */
+  void *(*xMalloc)(lsm_env*, size_t);            /* malloc(3) function */
+  void *(*xRealloc)(lsm_env*, void *, size_t);   /* realloc(3) function */
+  void (*xFree)(lsm_env*, void *);               /* free(3) function */
+  size_t (*xSize)(lsm_env*, void *);             /* xSize function */
   /****** mutexes ****************************************************/
   void *pMutexCtx;
   int (*xMutexStatic)(lsm_env*,int,lsm_mutex**); /* Obtain a static mutex */
@@ -621,10 +620,10 @@ int lsm_csr_last(lsm_cursor *pCsr);
 ** <li> At least one seek function must have been called on the cursor.
 ** <li> To call lsm_csr_next(), the most recent call to a seek function must
 ** have been either lsm_csr_first() or a call to lsm_csr_seek() specifying
-** LSM_SEEK_GE. 
+** LSM_SEEK_GE.
 ** <li> To call lsm_csr_prev(), the most recent call to a seek function must
-** have been either lsm_csr_first() or a call to lsm_csr_seek() specifying
-** LSM_SEEK_GE. 
+** have been either lsm_csr_last() or a call to lsm_csr_seek() specifying
+** LSM_SEEK_LE.
 ** </ul>
 **
 ** Otherwise, if the above conditions are not met when lsm_csr_next or 
