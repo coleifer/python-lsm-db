@@ -751,22 +751,6 @@ class TestCursors(BaseTestLSM):
 
 
 class TestLSMOptions(BaseTestLSM):
-    def test_readonly(self):
-        self.db['foo'] = 'bar'
-        self.db['nug'] = 'baze'
-        self.db.close()
-
-        db = lsm.LSM(self.filename, readonly=True)
-        self.assertEqual(db['foo'], 'bar')
-
-        def set_key():
-            db['foo'] = 'bar-1'
-        self.assertRaises(IOError, set_key)
-
-        self.db.open()
-        self.db['foo'] = 'bar-1'
-        self.assertEqual(self.db['foo'], 'bar-1')
-
     def test_no_open(self):
         db = lsm.LSM('test.lsm', open_database=False)
         self.assertFalse(db.is_open)

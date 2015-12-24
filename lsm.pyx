@@ -1,3 +1,5 @@
+from cpython.string cimport PyString_AsStringAndSize
+from cpython.string cimport PyString_FromStringAndSize
 import struct
 import sys
 
@@ -26,8 +28,6 @@ cdef extern from "src/lsm.h":
     cdef int LSM_LOCK_UNLOCK = 0
     cdef int LSM_LOCK_SHARED = 1
     cdef int LSM_LOCK_EXCL = 2
-
-    cdef int LSM_OPEN_READONLY = 0x0001
 
     cpdef int LSM_OK = 0
     cpdef int LSM_ERROR = 1
@@ -183,11 +183,6 @@ cdef extern from "src/lsm.h":
     #   Configure a factory method to be invoked in case of an LSM_MISMATCH
     #   error.
     cdef int LSM_CONFIG_SET_COMPRESSION_FACTORY = 15
-
-    # LSM_CONFIG_READONLY:
-    #   A read/write boolean parameter. This parameter may only be set before
-    #   lsm_open() is called.
-    cdef int LSM_CONFIG_READONLY = 16
 
     cdef int LSM_SAFETY_OFF =0
     cdef int LSM_SAFETY_NORMAL =1
@@ -439,6 +434,37 @@ cdef bytes encode(obj):
 
 cdef bint IS_PY3K = sys.version_info[0] == 3
 
+cdef dict EXC_MAPPING = {
+    LSM_NOMEM: MemoryError,
+    LSM_READONLY: IOError,
+    LSM_IOERR: IOError,
+    LSM_CORRUPT: IOError,
+    LSM_FULL: IOError,
+    LSM_CANTOPEN: IOError,
+}
+cdef dict EXC_MESSAGE_MAPPING = {
+    LSM_ERROR: 'Error',
+    LSM_BUSY: ' Busy',
+    LSM_NOMEM: 'Out of memory',
+    LSM_READONLY: 'Database is read-only',
+    LSM_IOERR: 'Unspecified IO error',
+    LSM_CORRUPT: 'Database is corrupt',
+    LSM_FULL: 'Storage device is full',
+    LSM_CANTOPEN: 'Cannot open database',
+    LSM_PROTOCOL: 'Protocol error',
+    LSM_MISUSE: 'Misuse',
+    LSM_MISMATCH: 'Mismatch',
+}
+
+cdef inline _check(int rc):
+    """Check the return value of a call to an LSM function."""
+    if rc == LSM_OK:
+        return
+
+    exc_class = EXC_MAPPING.get(rc, Exception)
+    exc_message = EXC_MESSAGE_MAPPING.get(rc, 'Unknown error')
+    raise exc_class('%s: %s' % (exc_message, rc))
+
 
 cdef class LSM(object):
     """
@@ -448,12 +474,12 @@ cdef class LSM(object):
     """
     cdef:
         lsm_db *db
-        readonly filename
-        readonly bint is_open
         bint open_database
-        bytes encoded_filename
-        readonly int transaction_depth
         bint was_opened
+        bytes encoded_filename
+        readonly bint is_open
+        readonly int transaction_depth
+        readonly filename
 
     def __cinit__(self):
         self.db = <lsm_db *>0
@@ -467,7 +493,7 @@ cdef class LSM(object):
             lsm_close(self.db)
 
     def __init__(self, filename, open_database=True, page_size=None,
-                 block_size=None, safety_level=None, readonly=False,
+                 block_size=None, safety_level=None,
                  enable_multiple_processes=True):
         """
         :param str filename: Path to database file.
@@ -476,7 +502,6 @@ cdef class LSM(object):
         :param int page_size: Page size in bytes. Default is 4096.
         :param int block_size: Block size in kb. Default is 1024 (1MB).
         :param int safety_level: Safety level in face of crash.
-        :param bool readonly: Open database for read-only access.
         :param bool enable_multiple_processes: Allow multiple processes to
             access the database. Default is `True`.
         """
@@ -491,8 +516,6 @@ cdef class LSM(object):
             self.set_block_size(block_size)
         if safety_level is not None:
             self.set_safety(safety_level)
-        if readonly:
-            self.set_readonly(True)
         if not enable_multiple_processes:
             self.set_multiple_processes(False)
         self.open_database = open_database
@@ -506,14 +529,10 @@ cdef class LSM(object):
         """
         cdef int rc
         if self.is_open:
-            self.close()
             return False
 
-        if self.db is NULL:
-            self.db = <lsm_db *>0
-            self.check(lsm_new(NULL, &self.db))
-
-        self.check(lsm_open(self.db, self.encoded_filename))
+        _check(lsm_new(NULL, &self.db))
+        _check(lsm_open(self.db, self.encoded_filename))
         self.is_open = True
         self.was_opened = True
         return True
@@ -530,17 +549,17 @@ cdef class LSM(object):
         """
         cdef int rc
 
-        if self.is_open:
-            rc = lsm_close(self.db)
-            if rc in (LSM_BUSY, LSM_MISUSE):
-                raise IOError('Unable to close database, one or more '
-                              'cursors may still be in use.')
-            self.db = NULL
-            self.check(rc)
-            self.is_open = False
-            return True
-        else:
+        if not self.is_open:
             return False
+
+        rc = lsm_close(self.db)
+        if rc in (LSM_BUSY, LSM_MISUSE):
+            raise IOError('Unable to close database, one or more '
+                          'cursors may still be in use.')
+        self.db = <lsm_db *>0
+        self.is_open = False
+        _check(rc)
+        return True
 
     cpdef int autoflush(self, int nkb):
         """
@@ -558,7 +577,7 @@ cdef class LSM(object):
 
         The default value is 1024 (1MB).
         """
-        self.check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
+        _check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
         return nkb
 
     cpdef int set_page_size(self, int nbytes):
@@ -577,7 +596,7 @@ cdef class LSM(object):
         if self.was_opened:
             raise ValueError('Unable to set page size. Page size can only '
                              'be set before calling open().')
-        self.check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
+        _check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
         return nbytes
 
     cpdef int set_safety(self, int safety_level):
@@ -602,7 +621,7 @@ cdef class LSM(object):
         * ``SAFETY_NORMAL``
         * ``SAFETY_FULL``
         """
-        self.check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
+        _check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
         return safety_level
 
     cpdef int set_block_size(self, int nkb):
@@ -629,7 +648,7 @@ cdef class LSM(object):
         if self.was_opened:
             raise ValueError('Unable to set block size. Block size can only '
                              'be set before calling open().')
-        self.check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
+        _check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
         return nkb
 
     cpdef config_mmap(self, int mmap_kb):
@@ -640,7 +659,7 @@ cdef class LSM(object):
         is set to any value N greater than 1, then up to the first N KB of the
         file are memory mapped, and any remainder accessed using read/write IO.
         """
-        self.check(lsm_config(self.db, LSM_CONFIG_MMAP, &mmap_kb))
+        _check(lsm_config(self.db, LSM_CONFIG_MMAP, &mmap_kb))
 
     cpdef set_automerge(self, int nsegments):
         """
@@ -648,7 +667,7 @@ cdef class LSM(object):
 
         The default value is 4.
         """
-        self.check(lsm_config(self.db, LSM_CONFIG_AUTOMERGE, &nsegments))
+        _check(lsm_config(self.db, LSM_CONFIG_AUTOMERGE, &nsegments))
 
     cpdef set_multiple_processes(self, bint enable_multiple_processes):
         """
@@ -671,7 +690,7 @@ cdef class LSM(object):
         if self.was_opened:
             raise ValueError('Unable to set process flag. Multi-process flag '
                              'can only be set before calling open().')
-        self.check(lsm_config(
+        _check(lsm_config(
             self.db,
             LSM_CONFIG_MULTIPLE_PROCESSES,
             &enable_multiple_processes))
@@ -692,13 +711,7 @@ cdef class LSM(object):
 
         The default value is 2048 (checkpoint every 2MB).
         """
-        self.check(lsm_config(self.db, LSM_CONFIG_AUTOCHECKPOINT, &nbytes))
-
-    cpdef set_readonly(self, bint readonly):
-        """
-        This parameter may only be set before lsm_open() is called.
-        """
-        self.check(lsm_config(self.db, LSM_CONFIG_READONLY, &readonly))
+        _check(lsm_config(self.db, LSM_CONFIG_AUTOCHECKPOINT, &nbytes))
 
     cpdef int pages_written(self):
         """
@@ -706,7 +719,7 @@ cdef class LSM(object):
         lifetime of this connection.
         """
         cdef int npages
-        self.check(lsm_info(self.db, LSM_INFO_NWRITE, &npages))
+        _check(lsm_info(self.db, LSM_INFO_NWRITE, &npages))
         return npages
 
     cpdef int pages_read(self):
@@ -715,7 +728,7 @@ cdef class LSM(object):
         lifetime of this connection.
         """
         cdef int npages
-        self.check(lsm_info(self.db, LSM_INFO_NREAD, &npages))
+        _check(lsm_info(self.db, LSM_INFO_NREAD, &npages))
         return npages
 
     cpdef int checkpoint_size(self):
@@ -724,47 +737,15 @@ cdef class LSM(object):
         checkpoint.
         """
         cdef int nkb
-        self.check(lsm_info(self.db, LSM_INFO_CHECKPOINT_SIZE, &nkb))
+        _check(lsm_info(self.db, LSM_INFO_CHECKPOINT_SIZE, &nkb))
         return nkb
-
-    cpdef check(self, int rc):
-        """Check the return value of a call to an LSM function."""
-        if rc == LSM_OK:
-            return
-
-        exc_mapping = {
-            LSM_NOMEM: MemoryError,
-            LSM_READONLY: IOError,
-            LSM_IOERR: IOError,
-            LSM_CORRUPT: IOError,
-            LSM_FULL: IOError,
-            LSM_CANTOPEN: IOError,
-        }
-        exc_message_mapping = {
-            LSM_ERROR: 'Error',
-            LSM_BUSY: ' Busy',
-            LSM_NOMEM: 'Out of memory',
-            LSM_READONLY: 'Database is read-only',
-            LSM_IOERR: 'Unspecified IO error',
-            LSM_CORRUPT: 'Database is corrupt',
-            LSM_FULL: 'Storage device is full',
-            LSM_CANTOPEN: 'Cannot open database',
-            LSM_PROTOCOL: 'Protocol error',
-            LSM_MISUSE: 'Misuse',
-            LSM_MISMATCH: 'Mismatch',
-        }
-        exc_class = exc_mapping.get(rc, Exception)
-        exc_message = exc_message_mapping.get(rc, 'Unknown error')
-
-        raise exc_class('%s: %s' % (exc_message, rc))
 
     def __enter__(self):
         """
         Use the database as a context manager. The database will be closed
         when the wrapped block exits.
         """
-        if not self.is_open:
-            self.open()
+        self.open()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -787,13 +768,21 @@ cdef class LSM(object):
                 lsm_db.insert('key', 'value')
                 lsm_db['key'] = 'value'
         """
-        cdef bytes bkey = encode(key), bvalue = encode(value)
-        self.check(lsm_insert(
+        cdef:
+            char *kbuf
+            char *vbuf
+            int rc
+            Py_ssize_t klen, vlen
+
+        PyString_AsStringAndSize(key, &kbuf, &klen)
+        PyString_AsStringAndSize(value, &vbuf, &vlen)
+
+        rc = lsm_insert(
             self.db,
-            <char *>bkey,
-            len(bkey),
-            <char *>bvalue,
-            len(bvalue)))
+            kbuf,
+            klen,
+            vbuf,
+            vlen)
 
     cpdef update(self, dict values):
         """
@@ -846,28 +835,24 @@ cdef class LSM(object):
         """
         cdef:
             lsm_cursor *pcursor = <lsm_cursor *>0
-            bytes bkey = encode(key)
-            char *c_key = bkey
-            char *v
+            char *kbuf
+            char *vbuf
             int rc
             int vlen
+            Py_ssize_t klen
+
+        PyString_AsStringAndSize(key, &kbuf, &klen)
 
         # Use low-level cursor APIs for performance, since this method could
         # be a hot-spot. Another idea is to use a cursor cache or a shared
         # cursor context. Or the method could accept a cursor as a parameter.
         lsm_csr_open(self.db, &pcursor)
         try:
-            rc = lsm_csr_seek(pcursor, <void *>c_key, len(bkey), seek_method)
+            rc = lsm_csr_seek(pcursor, <void *>kbuf, klen, seek_method)
             if rc == LSM_OK and lsm_csr_valid(pcursor):
-                rc = lsm_csr_value(pcursor, <const void **>(&v), &vlen)
+                rc = lsm_csr_value(pcursor, <const void **>(&vbuf), &vlen)
                 if rc == LSM_OK:
-                    value = v[:vlen]
-                    if IS_PY3K:
-                        try:
-                            return value.decode('utf-8')
-                        except UnicodeDecodeError:
-                            pass
-                    return value
+                    return PyString_FromStringAndSize(vbuf, vlen)
             raise KeyError(key)
         finally:
             lsm_csr_close(pcursor)
@@ -1042,11 +1027,12 @@ cdef class LSM(object):
                 lsm_db.delete('some-key')
                 del lsm_db['some-key']
         """
-        cdef bytes bkey = encode(key)
-        self.check(lsm_delete(
-            self.db,
-            <char *>bkey,
-            len(bkey)))
+        cdef:
+            char *kbuf
+            Py_ssize_t klen
+
+        PyString_AsStringAndSize(key, &kbuf, &klen)
+        _check(lsm_delete(self.db, kbuf, klen))
 
     cpdef delete_range(self, start, end):
         """
@@ -1074,13 +1060,15 @@ cdef class LSM(object):
             >>> print list(db)
             [('d', 'D'), ('e', 'E'), ('f', 'F')]
         """
-        cdef bytes bstart = encode(start), bend = encode(end)
-        self.check(lsm_delete_range(
-            self.db,
-            <char *>bstart,
-            len(bstart),
-            <char *>bend,
-            len(bend)))
+        cdef:
+            char *sb
+            char *eb
+            Py_ssize_t sblen, eblen
+
+        PyString_AsStringAndSize(start, &sb, &sblen)
+        PyString_AsStringAndSize(end, &eb, &eblen)
+
+        _check(lsm_delete_range(self.db, sb, sblen, eb, eblen))
 
     def __getitem__(self, key):
         """
@@ -1222,7 +1210,7 @@ cdef class LSM(object):
 
     cpdef flush(self):
         """Flush the in-memory tree to disk, creating a new segment."""
-        self.check(lsm_flush(self.db))
+        _check(lsm_flush(self.db))
 
     cpdef work(self, int nmerge=1, int nkb=4096):
         """
@@ -1253,12 +1241,12 @@ cdef class LSM(object):
             raise RuntimeError('Unable to acquire the worker lock. Perhaps '
                                'another thread or process is working on the '
                                'database?')
-        self.check(rc)
+        _check(rc)
         return nbytes_written
 
     cpdef checkpoint(self, int nkb):
         """Write to the database file header."""
-        self.check(lsm_checkpoint(self.db, &nkb))
+        _check(lsm_checkpoint(self.db, &nkb))
 
     cpdef begin(self):
         """
@@ -1270,7 +1258,7 @@ cdef class LSM(object):
             context manager/decorator.
         """
         self.transaction_depth += 1
-        self.check(lsm_begin(self.db, self.transaction_depth))
+        _check(lsm_begin(self.db, self.transaction_depth))
 
     cpdef bint commit(self):
         """
@@ -1280,7 +1268,7 @@ cdef class LSM(object):
         """
         if self.transaction_depth > 0:
             self.transaction_depth -= 1
-            self.check(lsm_commit(self.db, self.transaction_depth))
+            _check(lsm_commit(self.db, self.transaction_depth))
             return True
         return False
 
@@ -1297,7 +1285,7 @@ cdef class LSM(object):
         if self.transaction_depth > 0:
             if not keep_transaction:
                 self.transaction_depth -= 1
-            self.check(lsm_rollback(self.db, self.transaction_depth))
+            _check(lsm_rollback(self.db, self.transaction_depth))
             return True
         return False
 
@@ -1402,7 +1390,7 @@ cdef class Cursor(object):
 
     def __dealloc__(self):
         if self.is_open:
-            self.close()
+            lsm_csr_close(self.cursor)
 
     cpdef open(self):
         """
@@ -1410,9 +1398,12 @@ cdef class Cursor(object):
         by applications, as it is called automatically when a
         :py:class:`Cursor` is instantiated.
         """
-        if not self.is_open:
-            lsm_csr_open(self.lsm.db, &self.cursor)
-            self.is_open = True
+        if self.is_open:
+            return False
+
+        lsm_csr_open(self.lsm.db, &self.cursor)
+        self.is_open = True
+        return True
 
     cpdef close(self):
         """
@@ -1428,9 +1419,12 @@ cdef class Cursor(object):
             If a cursor is not closed, then the database cannot be closed
             properly.
         """
-        if self.is_open:
-            lsm_csr_close(self.cursor)
-            self.is_open = False
+        if not self.is_open:
+            return False
+
+        lsm_csr_close(self.cursor)
+        self.is_open = False
+        return True
 
     def __enter__(self):
         """
@@ -1461,8 +1455,8 @@ cdef class Cursor(object):
         if self._consumed:
             raise StopIteration
 
-        key = self.key()
-        value = self.value()
+        key = self._key()
+        value = self._value()
         try:
             if self._reverse:
                 self.previous()
@@ -1477,16 +1471,21 @@ cdef class Cursor(object):
         """
         Compare the given key with key at the cursor's current position.
         """
-        cdef bytes bkey = encode(key)
-        cdef int res
+        cdef:
+            char *kbuf
+            int rc, res
+            Py_ssize_t klen
+
+        PyString_AsStringAndSize(key, &kbuf, &klen)
+
         if nlen == 0:
-            nlen = len(bkey)
+            nlen = klen
         rc = lsm_csr_cmp(
             self.cursor,
-            <char *>bkey,
+            kbuf,
             nlen,
             &res)
-        self.lsm.check(rc)
+        _check(rc)
         return res
 
     cpdef seek(self, key, int method=LSM_SEEK_EQ):
@@ -1508,13 +1507,16 @@ cdef class Cursor(object):
         http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki#lsm_csr_seek
         """
         cdef:
-            bytes bkey = encode(key)
-            char *c_key = bkey
+            char *kbuf
+            Py_ssize_t klen
             int rc
-        self.lsm.check(lsm_csr_seek(
+
+        PyString_AsStringAndSize(key, &kbuf, &klen)
+
+        _check(lsm_csr_seek(
             self.cursor,
-            <void *>c_key,  # For some reason a void ptr?
-            len(bkey),
+            <void *>kbuf,  # For some reason a void ptr?
+            klen,
             method))
         if not self.is_valid():
             raise KeyError(key)
@@ -1528,11 +1530,11 @@ cdef class Cursor(object):
 
     cpdef first(self):
         """Jump to the first key in the database."""
-        self.lsm.check(lsm_csr_first(self.cursor))
+        _check(lsm_csr_first(self.cursor))
 
     cpdef last(self):
         """Jump to the last key in the database."""
-        self.lsm.check(lsm_csr_last(self.cursor))
+        _check(lsm_csr_last(self.cursor))
 
     cpdef next(self):
         """
@@ -1544,7 +1546,7 @@ cdef class Cursor(object):
         :py:meth:`first` or :py:meth:`seek` with a seek method of ``SEEK_GE``.
         """
         cdef int rc
-        self.lsm.check(lsm_csr_next(self.cursor))
+        _check(lsm_csr_next(self.cursor))
         rc = lsm_csr_valid(self.cursor)
         if not rc:
             raise StopIteration
@@ -1559,7 +1561,7 @@ cdef class Cursor(object):
         :py:meth:`last` or :py:meth:`seek` with a seek method of ``SEEK_LE``.
         """
         cdef int rc
-        self.lsm.check(lsm_csr_prev(self.cursor))
+        _check(lsm_csr_prev(self.cursor))
         rc = lsm_csr_valid(self.cursor)
         if not rc:
             raise StopIteration
@@ -1570,9 +1572,10 @@ cdef class Cursor(object):
         by iterating from the cursor's current position until it reaches
         the given ``key``.
         """
-        cdef int is_reverse = self._reverse
-        cdef int res
-        cdef int nkey
+        cdef:
+            int is_reverse = self._reverse
+            int res
+            int nkey
 
         if key is not None:
             nkey = len(key)
@@ -1585,7 +1588,7 @@ cdef class Cursor(object):
                 elif is_reverse and res < 0:
                     break
 
-            yield (self.key(), self.value())
+            yield (self._key(), self._value())
             try:
                 if not is_reverse:
                     self.next()
@@ -1628,38 +1631,36 @@ cdef class Cursor(object):
         for key, value in self.fetch_until(end):
             yield (key, value)
 
-    cpdef key(self):
+    cdef inline _key(self):
         """Return the key at the cursor's current position."""
-        cdef char *k
-        cdef int klen
-        lsm_csr_key(self.cursor, <const void **>(&k), &klen)
-        value = k[:klen]
-        if IS_PY3K:
-            try:
-                value = value.decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-        return value
+        cdef:
+            char *k
+            int klen
 
-    cpdef value(self):
+        lsm_csr_key(self.cursor, <const void **>(&k), &klen)
+        return PyString_FromStringAndSize(k, klen)
+
+    cdef inline _value(self):
         """Return the value at the cursor's current position."""
-        cdef char *v
-        cdef int vlen
+        cdef:
+            char *v
+            int vlen
+
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
-        value = v[:vlen]
-        if IS_PY3K:
-            try:
-                value = value.decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-        return value
+        return PyString_FromStringAndSize(v, vlen)
+
+    def key(self):
+        return self._key()
+
+    def value(self):
+        return self._value()
 
     def keys(self):
         """Return a generator that successively yields keys."""
         if not self.is_valid():
             raise StopIteration
         while True:
-            yield self.key()
+            yield self._key()
             if self._reverse:
                 self.previous()
             else:
@@ -1670,7 +1671,7 @@ cdef class Cursor(object):
         if not self.is_valid():
             raise StopIteration
         while True:
-            yield self.value()
+            yield self._value()
             if self._reverse:
                 self.previous()
             else:
