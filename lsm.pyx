@@ -1,5 +1,4 @@
 from cpython.string cimport PyString_AsStringAndSize
-from cpython.string cimport PyString_FromStringAndSize
 import struct
 import sys
 
@@ -852,7 +851,13 @@ cdef class LSM(object):
             if rc == LSM_OK and lsm_csr_valid(pcursor):
                 rc = lsm_csr_value(pcursor, <const void **>(&vbuf), &vlen)
                 if rc == LSM_OK:
-                    return PyString_FromStringAndSize(vbuf, vlen)
+                    value = vbuf[:vlen]
+                    if IS_PY3K:
+                        try:
+                            return value.decode('utf-8')
+                        except UnicodeDecodeError:
+                            pass
+                    return value
             raise KeyError(key)
         finally:
             lsm_csr_close(pcursor)
@@ -1638,7 +1643,13 @@ cdef class Cursor(object):
             int klen
 
         lsm_csr_key(self.cursor, <const void **>(&k), &klen)
-        return PyString_FromStringAndSize(k, klen)
+        key = k[:klen]
+        if IS_PY3K:
+            try:
+                return key.decode('utf-8')
+            except UnicodeDecodeError:
+                pass
+        return key
 
     cdef inline _value(self):
         """Return the value at the cursor's current position."""
@@ -1647,7 +1658,13 @@ cdef class Cursor(object):
             int vlen
 
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
-        return PyString_FromStringAndSize(v, vlen)
+        value = v[:vlen]
+        if IS_PY3K:
+            try:
+                return value.decode('utf-8')
+            except UnicodeDecodeError:
+                pass
+        return value
 
     def key(self):
         return self._key()
