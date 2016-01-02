@@ -1,4 +1,4 @@
-from cpython.string cimport PyString_AsStringAndSize
+from cpython.bytes cimport PyBytes_AsStringAndSize
 import struct
 import sys
 
@@ -773,8 +773,12 @@ cdef class LSM(object):
             int rc
             Py_ssize_t klen, vlen
 
-        PyString_AsStringAndSize(key, &kbuf, &klen)
-        PyString_AsStringAndSize(value, &vbuf, &vlen)
+        if IS_PY3K:
+            key = encode(key)
+            value = encode(value)
+
+        PyBytes_AsStringAndSize(key, &kbuf, &klen)
+        PyBytes_AsStringAndSize(value, &vbuf, &vlen)
 
         rc = lsm_insert(
             self.db,
@@ -840,7 +844,9 @@ cdef class LSM(object):
             int vlen
             Py_ssize_t klen
 
-        PyString_AsStringAndSize(key, &kbuf, &klen)
+        if IS_PY3K:
+            key = encode(key)
+        PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         # Use low-level cursor APIs for performance, since this method could
         # be a hot-spot. Another idea is to use a cursor cache or a shared
@@ -1036,7 +1042,9 @@ cdef class LSM(object):
             char *kbuf
             Py_ssize_t klen
 
-        PyString_AsStringAndSize(key, &kbuf, &klen)
+        if IS_PY3K:
+            key = encode(key)
+        PyBytes_AsStringAndSize(key, &kbuf, &klen)
         _check(lsm_delete(self.db, kbuf, klen))
 
     cpdef delete_range(self, start, end):
@@ -1070,8 +1078,11 @@ cdef class LSM(object):
             char *eb
             Py_ssize_t sblen, eblen
 
-        PyString_AsStringAndSize(start, &sb, &sblen)
-        PyString_AsStringAndSize(end, &eb, &eblen)
+        if IS_PY3K:
+            start = encode(start)
+            end = encode(end)
+        PyBytes_AsStringAndSize(start, &sb, &sblen)
+        PyBytes_AsStringAndSize(end, &eb, &eblen)
 
         _check(lsm_delete_range(self.db, sb, sblen, eb, eblen))
 
@@ -1481,7 +1492,9 @@ cdef class Cursor(object):
             int rc, res
             Py_ssize_t klen
 
-        PyString_AsStringAndSize(key, &kbuf, &klen)
+        if IS_PY3K:
+            key = encode(key)
+        PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         if nlen == 0:
             nlen = klen
@@ -1516,7 +1529,9 @@ cdef class Cursor(object):
             Py_ssize_t klen
             int rc
 
-        PyString_AsStringAndSize(key, &kbuf, &klen)
+        if IS_PY3K:
+            key = encode(key)
+        PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         _check(lsm_csr_seek(
             self.cursor,
