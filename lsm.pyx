@@ -425,13 +425,19 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_cmp(lsm_cursor *pCsr, const void *pKey, int nKey, int *piRes)
 
 
+cdef bint IS_PY3K = sys.version_info[0] == 3
+
 cdef bytes encode(obj):
     if isinstance(obj, unicode):
         return obj.encode('utf-8')
+    elif isinstance(obj, bytes):
+        return obj
+    elif obj is None:
+        return obj
+    elif IS_PY3K:
+        return bytes(str(obj), 'utf-8')
     return bytes(obj)
 
-
-cdef bint IS_PY3K = sys.version_info[0] == 3
 
 cdef dict EXC_MAPPING = {
     LSM_NOMEM: MemoryError,
@@ -443,7 +449,7 @@ cdef dict EXC_MAPPING = {
 }
 cdef dict EXC_MESSAGE_MAPPING = {
     LSM_ERROR: 'Error',
-    LSM_BUSY: ' Busy',
+    LSM_BUSY: 'Busy',
     LSM_NOMEM: 'Out of memory',
     LSM_READONLY: 'Database is read-only',
     LSM_IOERR: 'Unspecified IO error',
@@ -780,12 +786,12 @@ cdef class LSM(object):
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
         PyBytes_AsStringAndSize(value, &vbuf, &vlen)
 
-        rc = lsm_insert(
+        _check(lsm_insert(
             self.db,
             kbuf,
             klen,
             vbuf,
-            vlen)
+            vlen))
 
     cpdef update(self, dict values):
         """
