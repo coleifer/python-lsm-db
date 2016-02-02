@@ -1011,11 +1011,17 @@ cdef class LSM(object):
             >>> db['0'::True]
             []
         """
-        if reverse and start and end and start < end:
-            raise ValueError('"%s" is less than "%s", but reverse was '
-                             'explicitly selected.' % (start, end))
+        first = start is None
+        last = end is None
+        one_empty = (first and not last) or (last and not first)
+        none_empty = not first and not last
+        if reverse:
+            if one_empty:
+                start, end = end, start
+            if none_empty and (start < end):
+                start, end = end, start
 
-        if start and end and start > end:
+        if none_empty and start > end:
             reverse = True
 
         try:
@@ -1130,8 +1136,7 @@ cdef class LSM(object):
         cdef bint reverse
 
         if isinstance(key, slice):
-            reverse =  key.step is True
-            return self.fetch_range(key.start, key.stop, reverse)
+            return self.fetch_range(key.start, key.stop, key.step)
         else:
             if isinstance(key, tuple):
                 key, seek_method = key

@@ -90,8 +90,10 @@ class TestLSM(BaseTestLSM):
         self.assertEqual(list(i), expected)
 
     def test_fetch_range(self):
+        results = []
         for i in range(1, 10):
             self.db['k%s' % i] = 'v%s' % i
+            results.append(('k%s' % i, 'v%s' % i))
 
         res = self.db['k2':'k5']
         self.assertIterEqual(res, [
@@ -131,14 +133,6 @@ class TestLSM(BaseTestLSM):
             ('k5', 'v5'),
         ])
 
-        # Missing end.
-        res = self.db['k3':'k55']
-        self.assertIterEqual(res, [
-            ('k3', 'v3'),
-            ('k4', 'v4'),
-            ('k5', 'v5'),
-        ])
-
         # Start exceeds highest key.
         res = self.db['xx':'yy']
         self.assertIterEqual(res, [])
@@ -153,9 +147,14 @@ class TestLSM(BaseTestLSM):
         res = self.db[:'bb']
         self.assertIterEqual(res, [])
 
+        res = self.db[:]
+        self.assertIterEqual(res, results)
+
     def test_fetch_range_reverse(self):
+        results = []
         for i in range(1, 10):
             self.db['k%s' % i] = 'v%s' % i
+            results.append(('k%s' % i, 'v%s' % i))
 
         res = self.db['k5':'k2':True]
         self.assertIterEqual(res, [
@@ -166,19 +165,19 @@ class TestLSM(BaseTestLSM):
         ])
 
         # Empty end.
-        res = self.db['k3'::True]
-        self.assertIterEqual(res, [
-            ('k3', 'v3'),
-            ('k2', 'v2'),
-            ('k1', 'v1'),
-        ])
-
-        # Empty start.
-        res = self.db[:'k7':True]
+        res = self.db['k7'::True]
         self.assertIterEqual(res, [
             ('k9', 'v9'),
             ('k8', 'v8'),
             ('k7', 'v7'),
+        ])
+
+        # Empty start.
+        res = self.db[:'k3':True]
+        self.assertIterEqual(res, [
+            ('k3', 'v3'),
+            ('k2', 'v2'),
+            ('k1', 'v1'),
         ])
 
         # Missing start.
@@ -195,19 +194,27 @@ class TestLSM(BaseTestLSM):
             ('k4', 'v4'),
         ])
 
+        # End exceeds highest key.
+        res = self.db[:'xx':True]
+        self.assertIterEqual(res, list(reversed(results)))
+
         # Start exceeds highest key.
         res = self.db['yy':'xx':True]
         self.assertIterEqual(res, [])
 
-        res = self.db[:'xx':True]
+        res = self.db['xx'::True]
         self.assertIterEqual(res, [])
 
         # End preceds lowest key.
         res = self.db['bb':'aa':True]
         self.assertIterEqual(res, [])
 
-        res = self.db['bb'::True]
+        res = self.db[:'bb':True]
         self.assertIterEqual(res, [])
+
+        # Missing both.
+        res = self.db[::True]
+        self.assertIterEqual(res, list(reversed(results)))
 
     def test_fetch_range_implicit(self):
         for i in range(1, 10):
@@ -226,8 +233,6 @@ class TestLSM(BaseTestLSM):
             ('k6', 'v6'),
             ('k7', 'v7'),
         ])
-
-        self.assertRaises(ValueError, list, self.db['k4':'k7':True])
 
     def test_delete_range(self):
         for i in range(1, 10):
