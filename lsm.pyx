@@ -527,7 +527,7 @@ cdef class LSM(object):
         if self.open_database:
             self.open()
 
-    cpdef bint open(self):
+    cpdef open(self):
         """
         Open the database. If the database was already open, this will return
         False, otherwise returns True on success.
@@ -542,7 +542,7 @@ cdef class LSM(object):
         self.was_opened = True
         return True
 
-    cpdef bint close(self):
+    cpdef close(self):
         """
         Close the database. If the database was already closed, this will
         return False, otherwise returns True on success.
@@ -566,7 +566,7 @@ cdef class LSM(object):
         _check(rc)
         return True
 
-    cpdef int autoflush(self, int nkb):
+    cpdef int autoflush(self, int nkb) except -1:
         """
         This value determines the amount of data allowed to accumulate in a
         live in-memory tree before it is marked as old. After committing a
@@ -585,7 +585,7 @@ cdef class LSM(object):
         _check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
         return nkb
 
-    cpdef int set_page_size(self, int nbytes):
+    cpdef int set_page_size(self, int nbytes) except -1:
         """
         Set the page size (in bytes). Default value is 4096 bytes.
 
@@ -604,7 +604,7 @@ cdef class LSM(object):
         _check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
         return nbytes
 
-    cpdef int set_safety(self, int safety_level):
+    cpdef int set_safety(self, int safety_level) except -1:
         """
         Valid values are 0, 1 (the default) and 2. This parameter determines
         how robust the database is in the face of a system crash (e.g. a power
@@ -629,7 +629,7 @@ cdef class LSM(object):
         _check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
         return safety_level
 
-    cpdef int set_block_size(self, int nkb):
+    cpdef int set_block_size(self, int nkb) except -1:
         """
         Must be set to a power of two between 64 and 65536, inclusive (block
         sizes between 64KB and 64MB).
@@ -656,7 +656,11 @@ cdef class LSM(object):
         _check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
         return nkb
 
-    cpdef config_mmap(self, int mmap_kb):
+    cpdef int config_autowork(self, int val) except -1:
+        _check(lsm_config(self.db, LSM_CONFIG_AUTOWORK, &val))
+        return val
+
+    cpdef int config_mmap(self, int mmap_kb) except -1:
         """
         If this value is set to 0, then the database file is accessed using
         ordinary read/write IO functions. Or, if it is set to 1, then the
@@ -665,14 +669,20 @@ cdef class LSM(object):
         file are memory mapped, and any remainder accessed using read/write IO.
         """
         _check(lsm_config(self.db, LSM_CONFIG_MMAP, &mmap_kb))
+        return mmap_kb
 
-    cpdef set_automerge(self, int nsegments):
+    cpdef int set_use_log(self, bint use_log) except -1:
+        _check(lsm_config(self.db, LSM_CONFIG_USE_LOG, &use_log))
+        return <int>use_log
+
+    cpdef int set_automerge(self, int nsegments) except -1:
         """
         The minimum number of segments to merge together at a time.
 
         The default value is 4.
         """
         _check(lsm_config(self.db, LSM_CONFIG_AUTOMERGE, &nsegments))
+        return nsegments
 
     cpdef set_multiple_processes(self, bint enable_multiple_processes):
         """
@@ -699,6 +709,7 @@ cdef class LSM(object):
             self.db,
             LSM_CONFIG_MULTIPLE_PROCESSES,
             &enable_multiple_processes))
+        return enable_multiple_processes
 
     cpdef set_auto_checkpoint(self, int nbytes):
         """
@@ -717,6 +728,7 @@ cdef class LSM(object):
         The default value is 2048 (checkpoint every 2MB).
         """
         _check(lsm_config(self.db, LSM_CONFIG_AUTOCHECKPOINT, &nbytes))
+        return nbytes
 
     cpdef int pages_written(self):
         """
@@ -744,6 +756,14 @@ cdef class LSM(object):
         cdef int nkb
         _check(lsm_info(self.db, LSM_INFO_CHECKPOINT_SIZE, &nkb))
         return nkb
+
+    cpdef tuple tree_size(self):
+        """
+        The size of the two trees.
+        """
+        cdef int t1, t2
+        _check(lsm_info(self.db, LSM_INFO_TREE_SIZE, &t1, &t2))
+        return (t1, t2)
 
     def __enter__(self):
         """
@@ -1287,7 +1307,7 @@ cdef class LSM(object):
         self.transaction_depth += 1
         _check(lsm_begin(self.db, self.transaction_depth))
 
-    cpdef bint commit(self):
+    cpdef commit(self):
         """
         Commit the inner-most transaction.
 
@@ -1299,7 +1319,7 @@ cdef class LSM(object):
             return True
         return False
 
-    cpdef bint rollback(self, keep_transaction=True):
+    cpdef rollback(self, keep_transaction=True):
         """
         Rollback the inner-most transaction. If `keep_transaction` is `True`,
         then the transaction will remain open after the changes were rolled
