@@ -1,3 +1,4 @@
+# cython: profile=True
 from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.unicode cimport PyUnicode_AsUTF8String
@@ -231,11 +232,9 @@ cdef dict EXC_MESSAGE_MAPPING = {
 
 cdef inline _check(int rc):
     """Check the return value of a call to an LSM function."""
-    if rc == LSM_OK:
-        return
-
-    exc_class = EXC_MAPPING.get(rc, Exception)
-    raise exc_class(EXC_MESSAGE_MAPPING.get(rc, 'Unknown error'))
+    if rc != LSM_OK:
+        exc_class = EXC_MAPPING.get(rc, Exception)
+        raise exc_class(EXC_MESSAGE_MAPPING.get(rc, 'Unknown error'))
 
 
 cdef set OPTIONS = set([])
@@ -1759,3 +1758,4 @@ SEEK_LEFAST = LSM_SEEK_LEFAST
 SEEK_LE = LSM_SEEK_LE
 SEEK_EQ = LSM_SEEK_EQ
 SEEK_GE = LSM_SEEK_GE
+"""ADD: # cython: profile=True to top of file to use with cProfile."""
