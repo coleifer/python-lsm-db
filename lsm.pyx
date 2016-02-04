@@ -666,7 +666,7 @@ cdef class LSM(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    cpdef void insert(self, key, value) except *:
+    cpdef insert(self, key, value):
         """
         Insert a key/value pair to the database. If the key exists, the
         previous value will be overwritten.
@@ -703,7 +703,7 @@ cdef class LSM(object):
             vbuf,
             vlen))
 
-    cpdef void update(self, dict values) except *:
+    cpdef update(self, dict values):
         """
         Add an arbitrary number of key/value pairs. Unlike the Python
         ``dict.update`` method, :py:meth:`~LSM.update` does not accept
@@ -947,7 +947,7 @@ cdef class LSM(object):
         finally:
             cursor.close()
 
-    cpdef void delete(self, key) except *:
+    cpdef delete(self, key):
         """
         Remove the specified key and value from the database. If the key does
         not exist, no exception is raised.
@@ -971,7 +971,7 @@ cdef class LSM(object):
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
         _check(lsm_delete(self.db, kbuf, klen))
 
-    cpdef void delete_range(self, start, end) except *:
+    cpdef delete_range(self, start, end):
         """
         Delete a range of keys, though the start and end keys themselves
         are not deleted.
@@ -1147,7 +1147,7 @@ cdef class LSM(object):
         self[key] = struct.pack('>q', ivalue)
         return ivalue
 
-    cpdef void flush(self) except *:
+    cpdef flush(self):
         """
         Flush the in-memory tree to disk, creating a new segment.
 
@@ -1223,7 +1223,7 @@ cdef class LSM(object):
         _check(rc)
         return nkb
 
-    cpdef void begin(self) except *:
+    cpdef begin(self):
         """
         Begin a transaction. Transactions can be nested.
 
