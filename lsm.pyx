@@ -1,4 +1,3 @@
-# cython: profile=True
 from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.unicode cimport PyUnicode_AsUTF8String
