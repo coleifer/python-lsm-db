@@ -48,140 +48,21 @@ cdef extern from "src/lsm.h":
 
     cdef int lsm_config(lsm_db *pDb, int verb, ...)
 
-    # LSM_CONFIG_AUTOFLUSH:
-    #   A read/write integer parameter.
-    #
-    #   This value determines the amount of data allowed to accumulate in a
-    #   live in-memory tree before it is marked as old. After committing a
-    #   transaction, a connection checks if the size of the live in-memory tree,
-    #   including data structure overhead, is greater than the value of this
-    #   option in KB. If it is, and there is not already an old in-memory tree,
-    #   the live in-memory tree is marked as old.
-    #
-    #   The maximum allowable value is 1048576 (1GB). There is no minimum
-    #   value. If this parameter is set to zero, then an attempt is made to
-    #   mark the live in-memory tree as old after each transaction is committed.
-    #
-    #   The default value is 1024 (1MB).
     cdef int LSM_CONFIG_AUTOFLUSH = 1
-
-    # LSM_CONFIG_PAGE_SIZE:
-    #   A read/write integer parameter. This parameter may only be set before
-    #   lsm_open() has been called.
     cdef int LSM_CONFIG_PAGE_SIZE = 2
-
-    # LSM_CONFIG_SAFETY:
-    #   A read/write integer parameter. Valid values are 0, 1 (the default)
-    #   and 2. This parameter determines how robust the database is in the
-    #   face of a system crash (e.g. a power failure or operating system
-    #   crash). As follows:
-    #
-    #     0 (off):    No robustness. A system crash may corrupt the database.
-    #
-    #     1 (normal): Some robustness. A system crash may not corrupt the
-    #                 database file, but recently committed transactions may
-    #                 be lost following recovery.
-    #
-    #     2 (full):   Full robustness. A system crash may not corrupt the
-    #                 database file. Following recovery the database file
-    #                 contains all successfully committed transactions.
     cdef int LSM_CONFIG_SAFETY = 3
-
-    # LSM_CONFIG_BLOCK_SIZE:
-    #   A read/write integer parameter.
-    #
-    #   This parameter may only be set before lsm_open() has been called. It
-    #   must be set to a power of two between 64 and 65536, inclusive (block
-    #   sizes between 64KB and 64MB).
-    #
-    #   If the connection creates a new database, the block size of the new
-    #   database is set to the value of this option in KB. After lsm_open()
-    #   has been called, querying this parameter returns the actual block
-    #   size of the opened database.
-    #
-    #   The default value is 1024 (1MB blocks).
     cdef int LSM_CONFIG_BLOCK_SIZE = 4
-
-    # LSM_CONFIG_AUTOWORK:
-    #   A read/write integer parameter.
     cdef int LSM_CONFIG_AUTOWORK = 5
-
-    # LSM_CONFIG_MMAP:
-    #   A read/write integer parameter. If this value is set to 0, then the
-    #   database file is accessed using ordinary read/write IO functions. Or,
-    #   if it is set to 1, then the database file is memory mapped and accessed
-    #   that way. If this parameter is set to any value N greater than 1, then
-    #   up to the first N KB of the file are memory mapped, and any remainder
-    #   accessed using read/write IO.
-    #
-    #   The default value is 1 on 64-bit platforms and 32768 on 32-bit platforms.
     cdef int LSM_CONFIG_MMAP = 7
-
-    # LSM_CONFIG_USE_LOG:
-    #   A read/write boolean parameter. True (the default) to use the log
-    #   file normally. False otherwise.
     cdef int LSM_CONFIG_USE_LOG = 8
-
-    # LSM_CONFIG_AUTOMERGE:
-    #   A read/write integer parameter. The minimum number of segments to
-    #   merge together at a time. Default value 4.
     cdef int LSM_CONFIG_AUTOMERGE = 9
-
-    # LSM_CONFIG_MAX_FREELIST:
-    #   A read/write integer parameter. The maximum number of free-list
-    #   entries that are stored in a database checkpoint (the others are
-    #   stored elsewhere in the database).
-    #
-    #   There is no reason for an application to configure or query this
-    #   parameter. It is only present because configuring a small value
-    #   makes certain parts of the lsm code easier to test.
     cdef int LSM_CONFIG_MAX_FREELIST = 10
-
-    # LSM_CONFIG_MULTIPLE_PROCESSES:
-    #   A read/write boolean parameter. This parameter may only be set before
-    #   lsm_open() has been called. If true, the library uses shared-memory
-    #   and posix advisory locks to co-ordinate access by clients from within
-    #   multiple processes. Otherwise, if false, all database clients must be
-    #   located in the same process. The default value is true.
     cdef int LSM_CONFIG_MULTIPLE_PROCESSES = 11
-
-    # LSM_CONFIG_AUTOCHECKPOINT:
-    #   A read/write integer parameter.
-    #
-    #   If this option is set to non-zero value N, then a checkpoint is
-    #   automatically attempted after each N KB of data have been written to
-    #   the database file.
-    #
-    #   The amount of uncheckpointed data already written to the database file
-    #   is a global parameter. After performing database work (writing to the
-    #   database file), the process checks if the total amount of uncheckpointed
-    #   data exceeds the value of this paramter. If so, a checkpoint is performed.
-    #   This means that this option may cause the connection to perform a
-    #   checkpoint even if the current connection has itself written very little
-    #   data into the database file.
-    #
-    #   The default value is 2048 (checkpoint every 2MB).
     cdef int LSM_CONFIG_AUTOCHECKPOINT = 12
-
-    # LSM_CONFIG_SET_COMPRESSION:
-    #   Set the compression methods used to compress and decompress database
-    #   content. The argument to this option should be a pointer to a structure
-    #   of type lsm_compress. The lsm_config() method takes a copy of the
-    #   structures contents.
-    #
-    #   This option may only be used before lsm_open() is called. Invoking it
-    #   after lsm_open() has been called results in an LSM_MISUSE error.
     cdef int LSM_CONFIG_SET_COMPRESSION = 13
-
-    # LSM_CONFIG_GET_COMPRESSION:
-    #   Query the compression methods used to compress and decompress database
-    #   content.
     cdef int LSM_CONFIG_GET_COMPRESSION = 14
-
-    # LSM_CONFIG_SET_COMPRESSION_FACTORY:
-    #   Configure a factory method to be invoked in case of an LSM_MISMATCH
-    #   error.
     cdef int LSM_CONFIG_SET_COMPRESSION_FACTORY = 15
+    cdef int LSM_CONFIG_READONLY = 16
 
     cdef int LSM_SAFETY_OFF =0
     cdef int LSM_SAFETY_NORMAL =1
@@ -189,122 +70,6 @@ cdef extern from "src/lsm.h":
 
     # Query for operational statistics.
     cdef int lsm_info(lsm_db *pDb, int verb, ...)
-
-    # The following values may be passed as the second argument to lsm_info().
-    #
-    # LSM_INFO_NWRITE:
-    #   The third parameter should be of type (int *). The location pointed
-    #   to by the third parameter is set to the number of 4KB pages written to
-    #   the database file during the lifetime of this connection.
-    #
-    # LSM_INFO_NREAD:
-    #   The third parameter should be of type (int *). The location pointed
-    #   to by the third parameter is set to the number of 4KB pages read from
-    #   the database file during the lifetime of this connection.
-    #
-    # LSM_INFO_DB_STRUCTURE:
-    #   The third argument should be of type (char **). The location pointed
-    #   to is populated with a pointer to a nul-terminated string containing
-    #   the string representation of a Tcl data-structure reflecting the
-    #   current structure of the database file. Specifically, the current state
-    #   of the worker snapshot. The returned string should be eventually freed
-    #   by the caller using lsm_free().
-    #
-    #   The returned list contains one element for each level in the database,
-    #   in order from most to least recent. Each element contains a
-    #   single element for each segment comprising the corresponding level,
-    #   starting with the lhs segment, then each of the rhs segments (if any)
-    #   in order from most to least recent.
-    #
-    #   Each segment element is itself a list of 4 integer values, as follows:
-    #
-    #   <ol><li> First page of segment
-    #       <li> Last page of segment
-    #       <li> Root page of segment (if applicable)
-    #       <li> Total number of pages in segment
-    #   </ol>
-    #
-    # LSM_INFO_ARRAY_STRUCTURE:
-    #   There should be two arguments passed following this option (i.e. a
-    #   total of four arguments passed to lsm_info()). The first argument
-    #   should be the page number of the first page in a database array
-    #   (perhaps obtained from an earlier INFO_DB_STRUCTURE call). The second
-    #   trailing argument should be of type (char **). The location pointed
-    #   to is populated with a pointer to a nul-terminated string that must
-    #   be eventually freed using lsm_free() by the caller.
-    #
-    #   The output string contains the text representation of a Tcl list of
-    #   integers. Each pair of integers represent a range of pages used by
-    #   the identified array. For example, if the array occupies database
-    #   pages 993 to 1024, then pages 2048 to 2777, then the returned string
-    #   will be "993 1024 2048 2777".
-    #
-    #   If the specified integer argument does not correspond to the first
-    #   page of any database array, LSM_ERROR is returned and the output
-    #   pointer is set to a NULL value.
-    #
-    # LSM_INFO_LOG_STRUCTURE:
-    #   The third argument should be of type (char **). The location pointed
-    #   to is populated with a pointer to a nul-terminated string containing
-    #   the string representation of a Tcl data-structure. The returned
-    #   string should be eventually freed by the caller using lsm_free().
-    #
-    #   The Tcl structure returned is a list of six integers that describe
-    #   the current structure of the log file.
-    #
-    # LSM_INFO_ARRAY_PAGES:
-    #
-    # LSM_INFO_PAGE_ASCII_DUMP:
-    #   As with LSM_INFO_ARRAY_STRUCTURE, there should be two arguments passed
-    #   with calls that specify this option - an integer page number and a
-    #   (char **) used to return a nul-terminated string that must be later
-    #   freed using lsm_free(). In this case the output string is populated
-    #   with a human-readable description of the page content.
-    #
-    #   If the page cannot be decoded, it is not an error. In this case the
-    #   human-readable output message will report the systems failure to
-    #   interpret the page data.
-    #
-    # LSM_INFO_PAGE_HEX_DUMP:
-    #   This argument is similar to PAGE_ASCII_DUMP, except that keys and
-    #   values are represented using hexadecimal notation instead of ascii.
-    #
-    # LSM_INFO_FREELIST:
-    #   The third argument should be of type (char **). The location pointed
-    #   to is populated with a pointer to a nul-terminated string containing
-    #   the string representation of a Tcl data-structure. The returned
-    #   string should be eventually freed by the caller using lsm_free().
-    #
-    #   The Tcl structure returned is a list containing one element for each
-    #   free block in the database. The element itself consists of two
-    #   integers - the block number and the id of the snapshot that freed it.
-    #
-    # LSM_INFO_CHECKPOINT_SIZE:
-    #   The third argument should be of type (int *). The location pointed to
-    #   by this argument is populated with the number of KB written to the
-    #   database file since the most recent checkpoint.
-    #
-    # LSM_INFO_TREE_SIZE:
-    #   If this value is passed as the second argument to an lsm_info() call, it
-    #   should be followed by two arguments of type (int *) (for a total of four
-    #   arguments).
-    #
-    #   At any time, there are either one or two tree structures held in shared
-    #   memory that new database clients will access (there may also be additional
-    #   tree structures being used by older clients - this API does not provide
-    #   information on them). One tree structure - the current tree - is used to
-    #   accumulate new data written to the database. The other tree structure -
-    #   the old tree - is a read-only tree holding older data and may be flushed
-    #   to disk at any time.
-    #
-    #   Assuming no error occurs, the location pointed to by the first of the two
-    #   (int *) arguments is set to the size of the old in-memory tree in KB.
-    #   The second is set to the size of the current, or live in-memory tree.
-    #
-    # LSM_INFO_COMPRESSION_ID:
-    #   This value should be followed by a single argument of type
-    #   (unsigned int *). If successful, the location pointed to is populated
-    #   with the database compression id before returning.
 
     cdef int LSM_INFO_NWRITE = 1
     cdef int LSM_INFO_NREAD = 2
@@ -471,24 +236,112 @@ cdef inline _check(int rc):
     raise exc_class('%s: %s' % (exc_message, rc))
 
 
+cdef set OPTIONS = set([])
+
+def option(name, lsm_flag, bool_to_int=False, pre_open=False):
+    global OPTIONS
+    OPTIONS.add(name)
+    def _getter(LSM self):
+        cdef int i = -1
+        _check(lsm_config(self.db, lsm_flag, &i))
+        return i
+
+    def _setter(LSM self, value):
+        cdef int i
+        if pre_open and self.was_opened:
+            raise ValueError('cannot set option after database has been '
+                             'opened.')
+        if bool_to_int:
+            i = value and 1 or 0
+        else:
+            i = value
+        _check(lsm_config(self.db, lsm_flag, &i))
+        self._options[name] = value
+        return i
+    return property(_getter, _setter)
+
+
 cdef class LSM(object):
     """
     Python wrapper for SQLite4's LSM implementation.
 
     http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki
+
+    Performance notes
+    -----------------
+
+    Optimizing database write throughput and responsiveness is done by
+    configuring and scheduling work and checkpoint operations, and by
+    configuring a few other parameters.
+
+    autocheckpoint (default=2048 in KB, or 2MB)
+        Controls how often the database is checkpointed. Increasing this value
+        to 8MB may improve overall write throughput.
+
+    autoflush (default=1024 in KB, or 1MB)
+        Determines how much data, in KB, is allowed to accumulate in the live
+        in-memory tree before the tree is marked as "old". The default, 1024K,
+        may be increased to improve overall write throughput. Decreasing this
+        value reduces memory usage.
+
+    automerge (default=4 segments)
+        If auto-work is enabled, then this option is set to the number of
+        segments that the library attempts to merge simultaneously. Increasing
+        this value may reduce the total amount of data written to the database
+        file. Decreasing it has the opposite effect and also decreases the
+        average number of segments in the file, which may improve reads.
+
+        The default value is 4, but may be set to any value between 2 and 8.
+
+    autowork (enabled by default)
+        Let the database determine when to perform checkpoints, as a part of
+        calls to insert(), delete(), or commit(). If set to 0 (false), then
+        the application must schedule these operations.
+
+    mmap (enabled by default on 64-bit systems)
+        If LSM is running on 64-bit system, mmap may be set to 1 or 0. On
+        32-bit systems mmap is always 0.
+
+        If enabled, the entire database file is memory mapped. If false, data
+        is accessed using the OS file primitives. Memory mapping can
+        significantly improve the performance of read operations, as pages do
+        not have to be copied from OS buffers into user space.
+
+    multiple_processes (enabled by default)
+        If set to 0 (false) the library does not use file-locking primitives
+        to lock the database, which speeds up transactions. This option is
+        enabled by default.
+
+    write_safety (default=1)
+        This option determines how often the library pauses to wait for data
+        written to the file-system to be synced. Since syncing is much slower
+        than simply copying data into OS buffers, this option has a large
+        effect on write performance. See set_write_safety() for more info.
+
+    transaction_log (enabled by default)
+        This option determines whether the db will write changes to a log
+        file. If disabled, writes will be faster but there is a chance for
+        data loss in the event of application crash or power failure. Option
+        is enabled by default.
+
+    The speed of database read operations is largely determined by the number
+    of segments in the database file. So optimizing read operations is also
+    linked to the configuring and scheduling of database write operations, as
+    these policies determine the number of segments that are present in the
+    database file at any time.
     """
     cdef:
         lsm_db *db
         bint open_database
         bint was_opened
         bytes encoded_filename
+        dict _options
         readonly bint is_open
         readonly int transaction_depth
         readonly filename
 
     def __cinit__(self):
         self.db = <lsm_db *>0
-        lsm_new(NULL, &self.db)
         self.is_open = False
         self.transaction_depth = 0
         self.was_opened = False
@@ -497,32 +350,27 @@ cdef class LSM(object):
         if self.is_open and self.db:
             lsm_close(self.db)
 
-    def __init__(self, filename, open_database=True, page_size=None,
-                 block_size=None, safety_level=None,
-                 enable_multiple_processes=True):
+    def __init__(self, filename, open_database=True, **options):
         """
         :param str filename: Path to database file.
         :param bool open_database: Whether to open the database automatically
             when the class is instantiated.
-        :param int page_size: Page size in bytes. Default is 4096.
-        :param int block_size: Block size in kb. Default is 1024 (1MB).
-        :param int safety_level: Safety level in face of crash.
-        :param bool enable_multiple_processes: Allow multiple processes to
-            access the database. Default is `True`.
+        :param options: Values for the various tunable options.
         """
         self.filename = filename
         if isinstance(filename, unicode):
             self.encoded_filename = fsencode(filename)
         else:
             self.encoded_filename = bytes(filename)
-        if page_size:
-            self.set_page_size(page_size)
-        if block_size:
-            self.set_block_size(block_size)
-        if safety_level is not None:
-            self.set_safety(safety_level)
-        if not enable_multiple_processes:
-            self.set_multiple_processes(False)
+
+        bad_options = set(options) - OPTIONS
+        if bad_options:
+            raise ValueError('The following options were not recognized: %s. '
+                             'Valid options are:\n%s' %
+                             (', '.join(sorted(bad_options)),
+                              '\n'.join(sorted(OPTIONS))))
+        self._options = options
+
         self.open_database = open_database
         if self.open_database:
             self.open()
@@ -537,6 +385,11 @@ cdef class LSM(object):
             return False
 
         _check(lsm_new(NULL, &self.db))
+
+        # Configure database handle with any default configuration values.
+        for key, value in self._options.items():
+            setattr(self, key, value)
+
         _check(lsm_open(self.db, self.encoded_filename))
         self.is_open = True
         self.was_opened = True
@@ -566,169 +419,207 @@ cdef class LSM(object):
         _check(rc)
         return True
 
-    cpdef int autoflush(self, int nkb) except -1:
-        """
-        This value determines the amount of data allowed to accumulate in a
-        live in-memory tree before it is marked as old. After committing a
-        transaction, a connection checks if the size of the live in-memory
-        tree, including data structure overhead, is greater than the value of
-        this option in KB. If it is, and there is not already an old in-memory
-        tree, the live in-memory tree is marked as old.
+    """
+    page_size
 
-        The maximum allowable value is 1048576 (1GB). There is no minimum
-        value. If this parameter is set to zero, then an attempt is made to
-        mark the live in-memory tree as old after each transaction is
-        committed.
+    Set the page size (in bytes). Default value is 4096 bytes, but may
+    be between 256 and 64K.
 
-        The default value is 1024 (1MB).
-        """
-        _check(lsm_config(self.db, LSM_CONFIG_AUTOFLUSH, &nkb))
-        return nkb
+    .. warning:: This may only be set prior to calling `lsm_open()`.
+    """
+    page_size = option('page_size', LSM_CONFIG_PAGE_SIZE, pre_open=True)
 
-    cpdef int set_page_size(self, int nbytes) except -1:
-        """
-        Set the page size (in bytes). Default value is 4096 bytes.
+    """
+    block_size
 
-        .. warning::
+    Must be set to a power of two between 64 and 65536, inclusive (block
+    sizes between 64KB and 64MB).
 
-            This may only be set before calling ``lsm_open()``. The best
-            way to set this value is when you instantiate your :py:class:`LSM`
-            object.
+    If the connection creates a new database, the block size of the new
+    database is set to the value of this option in KB. After lsm_open()
+    has been called, querying this parameter returns the actual block
+    size of the opened database.
 
-            If the database is already open, then a ``ValueError`` will be
-            raised.
-        """
-        if self.was_opened:
-            raise ValueError('Unable to set page size. Page size can only '
-                             'be set before calling open().')
-        _check(lsm_config(self.db, LSM_CONFIG_PAGE_SIZE, &nbytes))
-        return nbytes
+    The default value is 1024 (1MB blocks).
 
-    cpdef int set_safety(self, int safety_level) except -1:
-        """
-        Valid values are 0, 1 (the default) and 2. This parameter determines
-        how robust the database is in the face of a system crash (e.g. a power
-        failure or operating system crash). As follows:
+    .. warning:: This may only be set prior to calling `lsm_open()`.
+    """
+    block_size = option('block_size', LSM_CONFIG_BLOCK_SIZE, pre_open=True)
 
-        * 0 (off):    No robustness. A system crash may corrupt the database.
+    """
+    multiple_processes
 
-        * 1 (normal): Some robustness. A system crash may not corrupt the
-                      database file, but recently committed transactions may
-                      be lost following recovery.
+    If true, the library uses shared-memory and posix advisory locks to
+    co-ordinate access by clients from within multiple processes.
+    Otherwise, if false, all database clients must be located in the same
+    process.
 
-        * 2 (full):   Full robustness. A system crash may not corrupt the
-                      database file. Following recovery the database file
-                      contains all successfully committed transactions.
+    The default value is 1, or true.
 
-        Values:
+    .. warning:: This may only be set prior to calling `lsm_open()`.
+    """
+    multiple_processes = option('multiple_processes',
+                                LSM_CONFIG_MULTIPLE_PROCESSES, pre_open=True,
+                                bool_to_int=True)
 
-        * ``SAFETY_OFF``
-        * ``SAFETY_NORMAL``
-        * ``SAFETY_FULL``
-        """
-        _check(lsm_config(self.db, LSM_CONFIG_SAFETY, &safety_level))
-        return safety_level
+    """
+    readonly
 
-    cpdef int set_block_size(self, int nkb) except -1:
-        """
-        Must be set to a power of two between 64 and 65536, inclusive (block
-        sizes between 64KB and 64MB).
+    Configure read-only mode for the database.
 
-        If the connection creates a new database, the block size of the new
-        database is set to the value of this option in KB. After lsm_open()
-        has been called, querying this parameter returns the actual block
-        size of the opened database.
+    .. warning:: This may only be set prior to calling `lsm_open()`.
+    """
+    readonly = option('readonly', LSM_CONFIG_READONLY, pre_open=True,
+                      bool_to_int=True)
 
-        The default value is 1024 (1MB blocks).
+    """
+    write_safety
 
-        .. warning::
+    From a performance point of view, this option determines how often the
+    library pauses to wait for data written to the file-system to be
+    stored on the persistent media (e.g. hard disk or solid-state memory).
+    This is also known as "syncing" data to disk. Since this is orders of
+    magnitude slower than simply copying data into operating system
+    buffers, the value of this option has a large effect on write
+    performance.
 
-            This may only be set before calling ``lsm_open()``. The best
-            way to set this value is when you instantiate your :py:class:`LSM`
-            object.
+    If LSM_CONFIG_SAFETY is set to 2 (FULL), then the library syncs the
+    data written to the log file to disk whenever a transaction is
+    committed. Or, if LSM_CONFIG_SAFETY is set to 1 (NORMAL), then data
+    is only synced to disk when a checkpoint is performed. Finally, if it
+    is set to 0 (OFF), then no data is ever synced to disk.
 
-            If the database is already open, then a ``ValueError`` will be
-            raised.
-        """
-        if self.was_opened:
-            raise ValueError('Unable to set block size. Block size can only '
-                             'be set before calling open().')
-        _check(lsm_config(self.db, LSM_CONFIG_BLOCK_SIZE, &nkb))
-        return nkb
+    The default value is 1 (NORMAL).
 
-    cpdef int config_autowork(self, int val) except -1:
-        _check(lsm_config(self.db, LSM_CONFIG_AUTOWORK, &val))
-        return val
+    * 0 (off):    No robustness. A system crash may corrupt the database.
 
-    cpdef int config_mmap(self, int mmap_kb) except -1:
-        """
-        If this value is set to 0, then the database file is accessed using
-        ordinary read/write IO functions. Or, if it is set to 1, then the
-        database file is memory mapped and accessed that way. If this parameter
-        is set to any value N greater than 1, then up to the first N KB of the
-        file are memory mapped, and any remainder accessed using read/write IO.
-        """
-        _check(lsm_config(self.db, LSM_CONFIG_MMAP, &mmap_kb))
-        return mmap_kb
+    * 1 (normal): Some robustness. A system crash may not corrupt the
+                  database file, but recently committed transactions may
+                  be lost following recovery.
 
-    cpdef int set_use_log(self, bint use_log) except -1:
-        _check(lsm_config(self.db, LSM_CONFIG_USE_LOG, &use_log))
-        return <int>use_log
+    * 2 (full):   Full robustness. A system crash may not corrupt the
+                  database file. Following recovery the database file
+                  contains all successfully committed transactions.
+    """
+    write_safety = option('write_safety', LSM_CONFIG_SAFETY)
 
-    cpdef int set_automerge(self, int nsegments) except -1:
-        """
-        The minimum number of segments to merge together at a time.
+    """
+    autoflush
 
-        The default value is 4.
-        """
-        _check(lsm_config(self.db, LSM_CONFIG_AUTOMERGE, &nsegments))
-        return nsegments
+    This value determines the amount of data allowed to accumulate in a
+    live in-memory tree before it is marked as old. After committing a
+    transaction, a connection checks if the size of the live in-memory
+    tree, including data structure overhead, is greater than the value of
+    this option in KB. If it is, and there is not already an old in-memory
+    tree, the live in-memory tree is marked as old.
 
-    cpdef set_multiple_processes(self, bint enable_multiple_processes):
-        """
-        If true, the library uses shared-memory and posix advisory locks to
-        co-ordinate access by clients from within multiple processes.
-        Otherwise, if false, all database clients must be located in the same
-        process.
+    An old in-memory tree is immutable - new data is always inserted into
+    the live tree. There may be at most one old tree in memory at a time.
 
-        The default value is ``True``.
+    The maximum allowable value is 1048576 (1GB). There is no minimum
+    value. If this parameter is set to zero, then an attempt is made to
+    mark the live in-memory tree as old after each transaction is
+    committed.
 
-        .. warning::
+    The default value is 1024 (1MB).
+    """
+    autoflush = option('autoflush', LSM_CONFIG_AUTOFLUSH)
 
-            This may only be set before calling ``lsm_open()``. The best
-            way to set this value is when you instantiate your :py:class:`LSM`
-            object.
+    """
+    autowork
 
-            If the database is already open, then a ``ValueError`` will be
-            raised.
-        """
-        if self.was_opened:
-            raise ValueError('Unable to set process flag. Multi-process flag '
-                             'can only be set before calling open().')
-        _check(lsm_config(
-            self.db,
-            LSM_CONFIG_MULTIPLE_PROCESSES,
-            &enable_multiple_processes))
-        return enable_multiple_processes
+    If auto-work is enabled, then this option is set to the number of
+    segments that the library attempts to merge simultaneously. Increasing
+    this value may reduce the total amount of data written to the database
+    file. Decreasing it increases the amount of data written to the file,
+    but also decreases the average number of segments present in the file,
+    which can improve the performance of database read operations.
 
-    cpdef set_auto_checkpoint(self, int nbytes):
-        """
-        If this option is set to non-zero value N, then a checkpoint is
-        automatically attempted after each N KB of data have been written to
-        the database file.
+    Additionally, whether or not auto-work is enabled, this option is used
+    to determine the maximum number of segments of a given age that are
+    allowed to accumulate in the database file.
 
-        The amount of uncheckpointed data already written to the database file
-        is a global parameter. After performing database work (writing to the
-        database file), the process checks if the total amount of
-        uncheckpointed data exceeds the value of this paramter. If so, a
-        checkpoint is performed. This means that this option may cause the
-        connection to perform a checkpoint even if the current connection has
-        itself written very little data into the database file.
+    May be set to 1 or 0, the default being 1.
+    """
+    autowork = option('autowork', LSM_CONFIG_AUTOWORK, bool_to_int=True)
 
-        The default value is 2048 (checkpoint every 2MB).
-        """
-        _check(lsm_config(self.db, LSM_CONFIG_AUTOCHECKPOINT, &nbytes))
-        return nbytes
+    """
+    automerge
+
+    If auto-work is enabled, then this option is set to the number of
+    segments that the library attempts to merge simultaneously. Increasing
+    this value may reduce the total amount of data written to the database
+    file. Decreasing it increases the amount of data written to the file,
+    but also decreases the average number of segments present in the file,
+    which can improve the performance of database read operations.
+
+    Additionally, whether or not auto-work is enabled, this option is used
+    to determine the maximum number of segments of a given age that are
+    allowed to accumulate in the database file. This is described in the
+    compulsary work and checkpoints section below.
+
+    The default value is 4. This option must be set to a value between
+    2 and 8, inclusive.
+    """
+    automerge = option('automerge', LSM_CONFIG_AUTOMERGE)
+
+    """
+    autocheckpoint
+
+    If this option is set to non-zero value N, then a checkpoint is
+    automatically attempted after each N KB of data have been written to
+    the database file.
+
+    The amount of uncheckpointed data already written to the database file
+    is a global parameter. After performing database work (writing to the
+    database file), the process checks if the total amount of
+    uncheckpointed data exceeds the value of this paramter. If so, a
+    checkpoint is performed. This means that this option may cause the
+    connection to perform a checkpoint even if the current connection has
+    itself written very little data into the database file.
+
+    The default value is 2048 (checkpoint every 2MB).
+    """
+    autocheckpoint = option('autocheckpoint', LSM_CONFIG_AUTOCHECKPOINT)
+
+    """
+    mmap
+
+    If LSM is running on a system with a 64-bit address space, this option
+    may be set to either 1 (true) or 0 (false). On a 32-bit platform, it
+    is always set to 0.
+
+    If it is set to true, the entire database file is memory mapped. Or,
+    if it is false, data is accessed using ordinary OS file read and write
+    primitives. Memory mapping the database file can significantly improve
+    the performance of read operations, as database pages do not have to
+    be copied from operating system buffers into user space buffers before
+    they can be examined.
+
+    This option may not be set if there is a read or write transaction
+    open on the database.
+    """
+    mmap = option('mmap', LSM_CONFIG_MMAP)
+
+    """
+    transaction_log
+
+    This is another option that may be set to either 1 (true) or 0 (false).
+    The default value is 1 (true). If it is set to false, then the library
+    does not write data into the database log file. This makes writing
+    faster, but also means that if an application crash or power failure
+    occurs, it is very likely that any recently committed transactions
+    will be lost.
+
+    If this option is set to true, then an application crash cannot cause
+    data loss. Whether or not data loss may occur in the event of a power
+    failure depends on the value of the LSM_CONFIG_SAFETY parameter.
+
+    This option can only be set if the connection does not currently have
+    an open write transaction.
+    """
+    transaction_log = option('transaction_log', LSM_CONFIG_USE_LOG,
+                             bool_to_int=True)
 
     cpdef int pages_written(self):
         """
@@ -759,7 +650,18 @@ cdef class LSM(object):
 
     cpdef tuple tree_size(self):
         """
-        The size of the two trees.
+        At any time, there are either one or two tree structures held in shared
+        memory that new database clients will access (there may also be
+        additional tree structures being used by older clients - this API does
+        not provide information on them). One tree structure - the current
+        tree - is used to accumulate new data written to the database. The
+        other tree structure - the old tree - is a read-only tree holding
+        older data and may be flushed to disk at any time.
+
+        Assuming no error occurs, the location pointed to by the first of the
+        two (int *) arguments is set to the size of the old in-memory tree in
+        KB. The second is set to the size of the current, or live in-memory
+        tree.
         """
         cdef int t1, t2
         _check(lsm_info(self.db, LSM_INFO_TREE_SIZE, &t1, &t2))
@@ -1256,7 +1158,27 @@ cdef class LSM(object):
         return ivalue
 
     cpdef flush(self):
-        """Flush the in-memory tree to disk, creating a new segment."""
+        """
+        Flush the in-memory tree to disk, creating a new segment.
+
+        The contents of an old in-memory tree may be written into the database
+        file at any point. Once its contents have been written (or "flushed")
+        to the database file, the in-memory tree may be discarded. Flushing an
+        in-memory tree to the database file creates a new database "segment".
+        A database segment is an immutable b-tree structure stored within the
+        database file. A single database file may contain up to 64 segments.
+
+        At any point, two or more existing segments within the database file
+        may be merged together into a single segment. Once their contents has
+        been merged into the new segment, the original segments may be
+        discarded.
+
+        After the set of segments in a database file has been modified (either
+        by flushing an in-memory tree to disk or by merging existing segments
+        together), the changes may be made persistent by "checkpointing" the
+        database. Checkpointing involves updating the database file header and
+        (usually) syncing the contents of the database file to disk.
+        """
         _check(lsm_flush(self.db))
 
     cpdef work(self, int nmerge=1, int nkb=4096):
@@ -1291,9 +1213,18 @@ cdef class LSM(object):
         _check(rc)
         return nbytes_written
 
-    cpdef checkpoint(self, int nkb):
-        """Write to the database file header."""
+    cpdef int checkpoint(self, int nkb) except -1:
+        """
+        Write to the database file header. If the current snapshot has already
+        been checkpointed, calling this function is a no-op. In this case if
+        pnKB is not NULL, *nkb is set to 0. Or, if the current snapshot is
+        successfully checkpointed by this function and pbKB is not NULL, *nkb
+        is set to the number of bytes written to the database file since the
+        previous checkpoint (the same measure as returned by the
+        LSM_INFO_CHECKPOINT_SIZE query).
+        """
         _check(lsm_checkpoint(self.db, &nkb))
+        return nkb
 
     cpdef begin(self):
         """

@@ -761,35 +761,59 @@ class TestLSMOptions(BaseTestLSM):
         self.assertFalse(db.is_open)
         self.assertFalse(os.path.exists('test.lsm'))
 
+    def test_default_options(self):
+        self.assertEqual(self.db.page_size, 4096)
+        self.assertEqual(self.db.block_size, 1024)
+        self.assertEqual(self.db.multiple_processes, 1)
+        self.assertEqual(self.db.readonly, 0)
+        self.assertEqual(self.db.write_safety, 1)
+        self.assertEqual(self.db.autoflush, 1024)
+        self.assertEqual(self.db.autowork, 1)
+        self.assertEqual(self.db.automerge, 4)
+        self.assertEqual(self.db.autocheckpoint, 2048)
+        self.assertTrue(self.db.mmap in (0, 1))
+        self.assertEqual(self.db.transaction_log, 1)
+
     def test_file_options(self):
         self.db.close()
-        db = lsm.LSM(self.filename, open_database=False)
+        os.unlink(self.filename)
 
-        ret = db.set_page_size(1024)  # 1KB, default is 4K.
-        self.assertEqual(ret, 1024)
+        db = lsm.LSM(self.filename, page_size=1024, block_size=4096)
+        self.assertEqual(db.page_size, 1024)
+        self.assertEqual(db.block_size, 4096)
 
-        # Passing in 0 will return the current value.
-        self.assertEqual(db.set_page_size(0), 1024)
-        self.assertEqual(db.set_page_size(0), 1024)
-        self.assertEqual(db.set_page_size(8192), 8192)
+        # Page and block cannot be modified after creation.
+        def set_page():
+            db.page_size = 8192
+        def set_block():
+            db.block_size = 8192
+        self.assertRaises(ValueError, set_page)
+        self.assertRaises(ValueError, set_block)
 
-        ret = db.set_block_size(4096)  # 4MB, default is 1MB.
-        self.assertEqual(ret, 4096)
+        # We can, however, alter the safety level at any time.
+        self.assertEqual(db.write_safety, lsm.SAFETY_NORMAL)
+        db.write_safety = lsm.SAFETY_FULL
+        self.assertEqual(db.write_safety, lsm.SAFETY_FULL)
 
-        self.assertEqual(db.set_block_size(0), 4096)
-        self.assertEqual(db.set_block_size(0), 4096)
-        self.assertEqual(db.set_block_size(8192), 8192)
-
-        ret = db.set_safety(lsm.SAFETY_FULL)
-        self.assertEqual(ret, lsm.SAFETY_FULL)
-
-        db.open()
         for i in range(10):
             db['k%s' % i] = 'v%s' % i
 
         self.assertEqual(db['k0'], 'v0')
         self.assertEqual(db['k9'], 'v9')
         db.close()
+
+        db2 = lsm.LSM(self.filename, page_size=1024, block_size=4096,
+                      mmap=0, transaction_log=False, write_safety=0,
+                      multiple_processes=False)
+        self.assertEqual(db2.page_size, 1024)
+        self.assertEqual(db2.block_size, 4096)
+        self.assertEqual(db2.mmap, 0)
+        self.assertEqual(db2.transaction_log, 0)
+        self.assertEqual(db2.write_safety, 0)
+        self.assertEqual(db2.multiple_processes, 0)
+        self.assertEqual(db2['k0'], 'v0')
+        self.assertEqual(db2['k9'], 'v9')
+        db2.close()
 
     def test_multithreading(self):
         def create_entries_thread(low, high):
@@ -819,8 +843,7 @@ class TestLSMInfo(BaseTestLSM):
         self.db.close()
 
         # Page size is 1KB.
-        db = lsm.LSM(self.filename, page_size=1024)
-        db.set_auto_checkpoint(4)  # Every 4KB.
+        db = lsm.LSM(self.filename, page_size=1024, autocheckpoint=4)
 
         w0 = db.pages_written()
         r0 = db.pages_read()
