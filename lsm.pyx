@@ -1,8 +1,8 @@
 from cpython.bytes cimport PyBytes_AsStringAndSize
+from cpython.bytes cimport PyBytes_Check
+from cpython.unicode cimport PyUnicode_AsUTF8String
+from cpython.version cimport PY_MAJOR_VERSION
 import struct
-import sys
-
-from libc.stdlib cimport free, malloc
 
 try:
     from os import fsencode
@@ -28,18 +28,18 @@ cdef extern from "src/lsm.h":
     cdef int LSM_LOCK_SHARED = 1
     cdef int LSM_LOCK_EXCL = 2
 
-    cpdef int LSM_OK = 0
-    cpdef int LSM_ERROR = 1
-    cpdef int LSM_BUSY = 5
-    cpdef int LSM_NOMEM = 7
-    cpdef int LSM_READONLY = 8
-    cpdef int LSM_IOERR = 10
-    cpdef int LSM_CORRUPT = 11
-    cpdef int LSM_FULL = 13
-    cpdef int LSM_CANTOPEN = 14
-    cpdef int LSM_PROTOCOL = 15
-    cpdef int LSM_MISUSE = 21
-    cpdef int LSM_MISMATCH = 50
+    cdef int LSM_OK = 0
+    cdef int LSM_ERROR = 1
+    cdef int LSM_BUSY = 5
+    cdef int LSM_NOMEM = 7
+    cdef int LSM_READONLY = 8
+    cdef int LSM_IOERR = 10
+    cdef int LSM_CORRUPT = 11
+    cdef int LSM_FULL = 13
+    cdef int LSM_CANTOPEN = 14
+    cdef int LSM_PROTOCOL = 15
+    cdef int LSM_MISUSE = 21
+    cdef int LSM_MISMATCH = 50
 
     # Connections.
     cdef int lsm_new(lsm_env *env, lsm_db **ppDb)
@@ -142,6 +142,11 @@ cdef extern from "src/lsm.h":
     #
     # LSM_SEEK_LEFAST requests are intended to be used to allocate database
     # keys.
+    cdef int LSM_SEEK_LEFAST = -2
+    cdef int LSM_SEEK_LE = -1
+    cdef int LSM_SEEK_EQ = 0
+    cdef int LSM_SEEK_GE = 1
+
     cdef int lsm_csr_seek(lsm_cursor *pCsr, const void *pKey, int nKey, int eSeek)
 
     cdef int lsm_csr_first(lsm_cursor *pCsr)
@@ -169,11 +174,6 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_next(lsm_cursor *pCsr)
     cdef int lsm_csr_prev(lsm_cursor *pCsr)
 
-    cdef int LSM_SEEK_LEFAST = -2
-    cdef int LSM_SEEK_LE = -1
-    cdef int LSM_SEEK_EQ = 0
-    cdef int LSM_SEEK_GE = 1
-
     cdef int lsm_csr_valid(lsm_cursor *pCsr)
     cdef int lsm_csr_key(lsm_cursor *pCsr, const void **ppKey, int *pnKey)
     cdef int lsm_csr_value(lsm_cursor *pCsr, const void **ppVal, int *pnVal)
@@ -190,18 +190,21 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_cmp(lsm_cursor *pCsr, const void *pKey, int nKey, int *piRes)
 
 
-cdef bint IS_PY3K = sys.version_info[0] == 3
+cdef bint IS_PY3K = PY_MAJOR_VERSION == 3
 
-cdef bytes encode(obj):
+cdef inline bytes encode(obj):
+    cdef bytes result
     if isinstance(obj, unicode):
-        return obj.encode('utf-8')
-    elif isinstance(obj, bytes):
-        return obj
+        result = PyUnicode_AsUTF8String(obj)
+    elif PyBytes_Check(obj):
+        result = <bytes>obj
     elif obj is None:
-        return obj
+        return None
     elif IS_PY3K:
-        return bytes(str(obj), 'utf-8')
-    return bytes(obj)
+        result = bytes(str(obj), 'utf-8')
+    else:
+        result = bytes(obj)
+    return result
 
 
 cdef dict EXC_MAPPING = {
@@ -232,8 +235,7 @@ cdef inline _check(int rc):
         return
 
     exc_class = EXC_MAPPING.get(rc, Exception)
-    exc_message = EXC_MESSAGE_MAPPING.get(rc, 'Unknown error')
-    raise exc_class('%s: %s' % (exc_message, rc))
+    raise exc_class(EXC_MESSAGE_MAPPING.get(rc, 'Unknown error'))
 
 
 cdef set OPTIONS = set([])
@@ -664,7 +666,7 @@ cdef class LSM(object):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    cpdef insert(self, key, value):
+    cpdef void insert(self, key, value) except *:
         """
         Insert a key/value pair to the database. If the key exists, the
         previous value will be overwritten.
@@ -701,7 +703,7 @@ cdef class LSM(object):
             vbuf,
             vlen))
 
-    cpdef update(self, dict values):
+    cpdef void update(self, dict values) except *:
         """
         Add an arbitrary number of key/value pairs. Unlike the Python
         ``dict.update`` method, :py:meth:`~LSM.update` does not accept
@@ -919,10 +921,12 @@ cdef class LSM(object):
             >>> db['0'::True]
             []
         """
-        first = start is None
-        last = end is None
-        one_empty = (first and not last) or (last and not first)
-        none_empty = not first and not last
+        cdef:
+            bint first = start is None
+            bint last = end is None
+            bint one_empty = (first and not last) or (last and not first)
+            bint none_empty = not first and not last
+
         if reverse:
             if one_empty:
                 start, end = end, start
@@ -943,7 +947,7 @@ cdef class LSM(object):
         finally:
             cursor.close()
 
-    cpdef delete(self, key):
+    cpdef void delete(self, key) except *:
         """
         Remove the specified key and value from the database. If the key does
         not exist, no exception is raised.
@@ -967,7 +971,7 @@ cdef class LSM(object):
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
         _check(lsm_delete(self.db, kbuf, klen))
 
-    cpdef delete_range(self, start, end):
+    cpdef void delete_range(self, start, end) except *:
         """
         Delete a range of keys, though the start and end keys themselves
         are not deleted.
@@ -1143,7 +1147,7 @@ cdef class LSM(object):
         self[key] = struct.pack('>q', ivalue)
         return ivalue
 
-    cpdef flush(self):
+    cpdef void flush(self) except *:
         """
         Flush the in-memory tree to disk, creating a new segment.
 
@@ -1167,7 +1171,7 @@ cdef class LSM(object):
         """
         _check(lsm_flush(self.db))
 
-    cpdef work(self, int nmerge=1, int nkb=4096):
+    cpdef int work(self, int nmerge=1, int nkb=4096) except -1:
         """
         Explicitly perform work on the database structure.
 
@@ -1212,7 +1216,7 @@ cdef class LSM(object):
         _check(lsm_checkpoint(self.db, &nkb))
         return nkb
 
-    cpdef begin(self):
+    cpdef void begin(self) except *:
         """
         Begin a transaction. Transactions can be nested.
 
@@ -1224,19 +1228,30 @@ cdef class LSM(object):
         self.transaction_depth += 1
         _check(lsm_begin(self.db, self.transaction_depth))
 
-    cpdef commit(self):
+    cdef int _commit(self) except -1:
+        if self.transaction_depth > 0:
+            self.transaction_depth -= 1
+            _check(lsm_commit(self.db, self.transaction_depth))
+            return 1
+        return 0
+
+    def commit(self):
         """
         Commit the inner-most transaction.
 
         :returns: Boolean indicating whether the changes were commited.
         """
-        if self.transaction_depth > 0:
-            self.transaction_depth -= 1
-            _check(lsm_commit(self.db, self.transaction_depth))
-            return True
-        return False
+        return self._commit() and True or False
 
-    cpdef rollback(self, keep_transaction=True):
+    cdef int _rollback(self, bint keep_transaction) except -1:
+        if self.transaction_depth > 0:
+            if not keep_transaction:
+                self.transaction_depth -= 1
+            _check(lsm_rollback(self.db, self.transaction_depth))
+            return 1
+        return 0
+
+    def rollback(self, bint keep_transaction=True):
         """
         Rollback the inner-most transaction. If `keep_transaction` is `True`,
         then the transaction will remain open after the changes were rolled
@@ -1246,14 +1261,9 @@ cdef class LSM(object):
             after the changes are rolled back (default=True).
         :returns: Boolean indicating whether the changes were rolled back.
         """
-        if self.transaction_depth > 0:
-            if not keep_transaction:
-                self.transaction_depth -= 1
-            _check(lsm_rollback(self.db, self.transaction_depth))
-            return True
-        return False
+        return self._rollback(keep_transaction) and True or False
 
-    def transaction(self):
+    cpdef Transaction transaction(self):
         """
         Create a context manager that runs the wrapped block in a transaction.
 
@@ -1281,9 +1291,9 @@ cdef class LSM(object):
                 # transfer money...
                 return
         """
-        return Transaction(self)
+        return Transaction.__new__(Transaction, self)
 
-    cpdef cursor(self, bint reverse=False):
+    cpdef Cursor cursor(self, bint reverse=False):
         """
         Create a cursor and return it as a context manager. After the wrapped
         block, the cursor is closed.
@@ -1311,7 +1321,7 @@ cdef class LSM(object):
             LSM databases cannot be closed as long as there are any open
             cursors, so it is very important to close them when finished.
         """
-        return Cursor(self, reverse)
+        return Cursor.__new__(Cursor, self, reverse)
 
 
 cdef class Cursor(object):
@@ -1682,7 +1692,7 @@ cdef class Transaction(object):
     """
     cdef LSM lsm
 
-    def __init__(self, lsm):
+    def __cinit__(self, lsm):
         self.lsm = lsm
 
     def __enter__(self):
@@ -1696,7 +1706,7 @@ cdef class Transaction(object):
             try:
                 self.commit(False)
             except:
-                self.lsm.rollback(False)
+                self.lsm._rollback(False)
                 raise
 
     def __call__(self, fn):
@@ -1713,7 +1723,7 @@ cdef class Transaction(object):
         transactional behavior for the rest of the block.
         """
         cdef int rc
-        rc = self.lsm.commit()
+        rc = self.lsm._commit()
         if begin:
             self.lsm.begin()
         return rc
@@ -1725,7 +1735,7 @@ cdef class Transaction(object):
         midway through a wrapped block of code, but want to retain the
         transactional behavior for the rest of the block.
         """
-        return self.lsm.rollback(keep_transaction=begin)
+        return self.lsm._rollback(keep_transaction=begin)
 
 
 SAFETY_OFF = LSM_SAFETY_OFF
