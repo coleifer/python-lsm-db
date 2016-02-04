@@ -268,61 +268,69 @@ cdef class LSM(object):
     http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki
 
     Performance notes
-    -----------------
+    ^^^^^^^^^^^^^^^^^
 
     Optimizing database write throughput and responsiveness is done by
     configuring and scheduling work and checkpoint operations, and by
     configuring a few other parameters.
 
-    autocheckpoint (default=2048 in KB, or 2MB)
-        Controls how often the database is checkpointed. Increasing this value
-        to 8MB may improve overall write throughput.
+    * ``autocheckpoint``, default=2048 in KB, or 2MB
 
-    autoflush (default=1024 in KB, or 1MB)
-        Determines how much data, in KB, is allowed to accumulate in the live
-        in-memory tree before the tree is marked as "old". The default, 1024K,
-        may be increased to improve overall write throughput. Decreasing this
-        value reduces memory usage.
+      Controls how often the database is checkpointed. Increasing this value
+      to 8MB may improve overall write throughput.
 
-    automerge (default=4 segments)
-        If auto-work is enabled, then this option is set to the number of
-        segments that the library attempts to merge simultaneously. Increasing
-        this value may reduce the total amount of data written to the database
-        file. Decreasing it has the opposite effect and also decreases the
-        average number of segments in the file, which may improve reads.
+    * ``autoflush``, default=1024 in KB, or 1MB
 
-        The default value is 4, but may be set to any value between 2 and 8.
+      Determines how much data, in KB, is allowed to accumulate in the live
+      in-memory tree before the tree is marked as "old". The default, 1024K,
+      may be increased to improve overall write throughput. Decreasing this
+      value reduces memory usage.
 
-    autowork (enabled by default)
-        Let the database determine when to perform checkpoints, as a part of
-        calls to insert(), delete(), or commit(). If set to 0 (false), then
-        the application must schedule these operations.
+    * ``automerge``, default=4 segments
 
-    mmap (enabled by default on 64-bit systems)
-        If LSM is running on 64-bit system, mmap may be set to 1 or 0. On
-        32-bit systems mmap is always 0.
+      If auto-work is enabled, then this option is set to the number of
+      segments that the library attempts to merge simultaneously. Increasing
+      this value may reduce the total amount of data written to the database
+      file. Decreasing it has the opposite effect and also decreases the
+      average number of segments in the file, which may improve reads.
 
-        If enabled, the entire database file is memory mapped. If false, data
-        is accessed using the OS file primitives. Memory mapping can
-        significantly improve the performance of read operations, as pages do
-        not have to be copied from OS buffers into user space.
+      The default value is 4, but may be set to any value between 2 and 8.
 
-    multiple_processes (enabled by default)
-        If set to 0 (false) the library does not use file-locking primitives
-        to lock the database, which speeds up transactions. This option is
-        enabled by default.
+    * ``autowork``, enabled by default
 
-    write_safety (default=1)
-        This option determines how often the library pauses to wait for data
-        written to the file-system to be synced. Since syncing is much slower
-        than simply copying data into OS buffers, this option has a large
-        effect on write performance. See set_write_safety() for more info.
+      Let the database determine when to perform checkpoints, as a part of
+      calls to insert(), delete(), or commit(). If set to 0 (false), then
+      the application must schedule these operations.
 
-    transaction_log (enabled by default)
-        This option determines whether the db will write changes to a log
-        file. If disabled, writes will be faster but there is a chance for
-        data loss in the event of application crash or power failure. Option
-        is enabled by default.
+    * ``mmap``, enabled by default on 64-bit systems
+
+      If LSM is running on 64-bit system, mmap may be set to 1 or 0. On
+      32-bit systems mmap is always 0.
+
+      If enabled, the entire database file is memory mapped. If false, data
+      is accessed using the OS file primitives. Memory mapping can
+      significantly improve the performance of read operations, as pages do
+      not have to be copied from OS buffers into user space.
+
+    * ``multiple_processes``, enabled by default
+
+      If set to 0 (false) the library does not use file-locking primitives
+      to lock the database, which speeds up transactions. This option is
+      enabled by default.
+
+    * ``write_safety``, default=1
+
+      This option determines how often the library pauses to wait for data
+      written to the file-system to be synced. Since syncing is much slower
+      than simply copying data into OS buffers, this option has a large
+      effect on write performance. See set_write_safety() for more info.
+
+    * ``transaction_log``, enabled by default
+
+      This option determines whether the db will write changes to a log
+      file. If disabled, writes will be faster but there is a chance for
+      data loss in the event of application crash or power failure. Option
+      is enabled by default.
 
     The speed of database read operations is largely determined by the number
     of segments in the database file. So optimizing read operations is also
@@ -419,19 +427,16 @@ cdef class LSM(object):
         _check(rc)
         return True
 
+    page_size = option('page_size', LSM_CONFIG_PAGE_SIZE, pre_open=True)
     """
-    page_size
-
     Set the page size (in bytes). Default value is 4096 bytes, but may
     be between 256 and 64K.
 
     .. warning:: This may only be set prior to calling `lsm_open()`.
     """
-    page_size = option('page_size', LSM_CONFIG_PAGE_SIZE, pre_open=True)
 
+    block_size = option('block_size', LSM_CONFIG_BLOCK_SIZE, pre_open=True)
     """
-    block_size
-
     Must be set to a power of two between 64 and 65536, inclusive (block
     sizes between 64KB and 64MB).
 
@@ -444,11 +449,11 @@ cdef class LSM(object):
 
     .. warning:: This may only be set prior to calling `lsm_open()`.
     """
-    block_size = option('block_size', LSM_CONFIG_BLOCK_SIZE, pre_open=True)
 
+    multiple_processes = option('multiple_processes',
+                                LSM_CONFIG_MULTIPLE_PROCESSES, pre_open=True,
+                                bool_to_int=True)
     """
-    multiple_processes
-
     If true, the library uses shared-memory and posix advisory locks to
     co-ordinate access by clients from within multiple processes.
     Otherwise, if false, all database clients must be located in the same
@@ -458,23 +463,17 @@ cdef class LSM(object):
 
     .. warning:: This may only be set prior to calling `lsm_open()`.
     """
-    multiple_processes = option('multiple_processes',
-                                LSM_CONFIG_MULTIPLE_PROCESSES, pre_open=True,
-                                bool_to_int=True)
 
+    readonly = option('readonly', LSM_CONFIG_READONLY, pre_open=True,
+                      bool_to_int=True)
     """
-    readonly
-
     Configure read-only mode for the database.
 
     .. warning:: This may only be set prior to calling `lsm_open()`.
     """
-    readonly = option('readonly', LSM_CONFIG_READONLY, pre_open=True,
-                      bool_to_int=True)
 
+    write_safety = option('write_safety', LSM_CONFIG_SAFETY)
     """
-    write_safety
-
     From a performance point of view, this option determines how often the
     library pauses to wait for data written to the file-system to be
     stored on the persistent media (e.g. hard disk or solid-state memory).
@@ -501,11 +500,9 @@ cdef class LSM(object):
                   database file. Following recovery the database file
                   contains all successfully committed transactions.
     """
-    write_safety = option('write_safety', LSM_CONFIG_SAFETY)
 
+    autoflush = option('autoflush', LSM_CONFIG_AUTOFLUSH)
     """
-    autoflush
-
     This value determines the amount of data allowed to accumulate in a
     live in-memory tree before it is marked as old. After committing a
     transaction, a connection checks if the size of the live in-memory
@@ -523,11 +520,9 @@ cdef class LSM(object):
 
     The default value is 1024 (1MB).
     """
-    autoflush = option('autoflush', LSM_CONFIG_AUTOFLUSH)
 
+    autowork = option('autowork', LSM_CONFIG_AUTOWORK, bool_to_int=True)
     """
-    autowork
-
     If auto-work is enabled, then this option is set to the number of
     segments that the library attempts to merge simultaneously. Increasing
     this value may reduce the total amount of data written to the database
@@ -541,11 +536,9 @@ cdef class LSM(object):
 
     May be set to 1 or 0, the default being 1.
     """
-    autowork = option('autowork', LSM_CONFIG_AUTOWORK, bool_to_int=True)
 
+    automerge = option('automerge', LSM_CONFIG_AUTOMERGE)
     """
-    automerge
-
     If auto-work is enabled, then this option is set to the number of
     segments that the library attempts to merge simultaneously. Increasing
     this value may reduce the total amount of data written to the database
@@ -561,11 +554,9 @@ cdef class LSM(object):
     The default value is 4. This option must be set to a value between
     2 and 8, inclusive.
     """
-    automerge = option('automerge', LSM_CONFIG_AUTOMERGE)
 
+    autocheckpoint = option('autocheckpoint', LSM_CONFIG_AUTOCHECKPOINT)
     """
-    autocheckpoint
-
     If this option is set to non-zero value N, then a checkpoint is
     automatically attempted after each N KB of data have been written to
     the database file.
@@ -580,11 +571,9 @@ cdef class LSM(object):
 
     The default value is 2048 (checkpoint every 2MB).
     """
-    autocheckpoint = option('autocheckpoint', LSM_CONFIG_AUTOCHECKPOINT)
 
+    mmap = option('mmap', LSM_CONFIG_MMAP)
     """
-    mmap
-
     If LSM is running on a system with a 64-bit address space, this option
     may be set to either 1 (true) or 0 (false). On a 32-bit platform, it
     is always set to 0.
@@ -599,11 +588,10 @@ cdef class LSM(object):
     This option may not be set if there is a read or write transaction
     open on the database.
     """
-    mmap = option('mmap', LSM_CONFIG_MMAP)
 
+    transaction_log = option('transaction_log', LSM_CONFIG_USE_LOG,
+                             bool_to_int=True)
     """
-    transaction_log
-
     This is another option that may be set to either 1 (true) or 0 (false).
     The default value is 1 (true). If it is set to false, then the library
     does not write data into the database log file. This makes writing
@@ -618,8 +606,6 @@ cdef class LSM(object):
     This option can only be set if the connection does not currently have
     an open write transaction.
     """
-    transaction_log = option('transaction_log', LSM_CONFIG_USE_LOG,
-                             bool_to_int=True)
 
     cpdef int pages_written(self):
         """
@@ -1742,4 +1728,11 @@ cdef class Transaction(object):
         return self.lsm.rollback(keep_transaction=begin)
 
 
-include "lsm.pxi"
+SAFETY_OFF = LSM_SAFETY_OFF
+SAFETY_NORMAL = LSM_SAFETY_NORMAL
+SAFETY_FULL = LSM_SAFETY_FULL
+
+SEEK_LEFAST = LSM_SEEK_LEFAST
+SEEK_LE = LSM_SEEK_LE
+SEEK_EQ = LSM_SEEK_EQ
+SEEK_GE = LSM_SEEK_GE

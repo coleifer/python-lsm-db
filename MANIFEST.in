@@ -3,7 +3,6 @@ include LICENSE
 include SQLITE_LICENSE
 include lsm.c
 include lsm.pyx
-include lsm.pxi
 include tests.py
 recursive-include docs *
 recursive-include src *
