@@ -95,9 +95,9 @@ cdef extern from "src/lsm.h":
     cdef int lsm_delete(lsm_db *pDb, const void *pKey, int nKey)
     cdef int lsm_delete_range(lsm_db *pDb, const void *pKey, int nKey, const void *pKey2, int nKey2)
 
-    cdef int lsm_work(lsm_db *pDb, int nMerge, int nKB, int *pnWrite)
-    cdef int lsm_flush(lsm_db *pDb)
-    cdef int lsm_checkpoint(lsm_db *pDb, int *pNumKBWritten)
+    cdef int lsm_work(lsm_db *pDb, int nMerge, int nKB, int *pnWrite) nogil
+    cdef int lsm_flush(lsm_db *pDb) nogil
+    cdef int lsm_checkpoint(lsm_db *pDb, int *pNumKBWritten) nogil
 
     # Cursors.
     cdef int lsm_csr_open(lsm_db *pDb, lsm_cursor **ppCsr)
@@ -1169,7 +1169,10 @@ cdef class LSM(object):
         database. Checkpointing involves updating the database file header and
         (usually) syncing the contents of the database file to disk.
         """
-        _check(lsm_flush(self.db))
+        cdef int rc
+        with nogil:
+            rc = lsm_flush(self.db)
+        _check(rc)
 
     cpdef int work(self, int nmerge=1, int nkb=4096) except -1:
         """
@@ -1195,7 +1198,8 @@ cdef class LSM(object):
         """
         cdef int nbytes_written
         cdef int rc
-        rc = lsm_work(self.db, nmerge, nkb, &nbytes_written)
+        with nogil:
+            rc = lsm_work(self.db, nmerge, nkb, &nbytes_written)
         if rc == LSM_BUSY:
             raise RuntimeError('Unable to acquire the worker lock. Perhaps '
                                'another thread or process is working on the '
@@ -1213,7 +1217,10 @@ cdef class LSM(object):
         previous checkpoint (the same measure as returned by the
         LSM_INFO_CHECKPOINT_SIZE query).
         """
-        _check(lsm_checkpoint(self.db, &nkb))
+        cdef int rc
+        with nogil:
+            rc = lsm_checkpoint(self.db, &nkb)
+        _check(rc)
         return nkb
 
     cpdef void begin(self) except *:
@@ -1366,20 +1373,23 @@ cdef class Cursor(object):
         if self.is_open:
             lsm_csr_close(self.cursor)
 
-    cpdef open(self):
+    cdef int _open(self) except -1:
         """
         Open the cursor. In general this method does not need to be called
         by applications, as it is called automatically when a
         :py:class:`Cursor` is instantiated.
         """
         if self.is_open:
-            return False
+            return 0
 
-        lsm_csr_open(self.lsm.db, &self.cursor)
+        _check(lsm_csr_open(self.lsm.db, &self.cursor))
         self.is_open = True
-        return True
+        return 1
 
-    cpdef close(self):
+    def open(self):
+        return self._open() and True or False
+
+    cdef int _close(self):
         """
         Close the cursor.
 
@@ -1394,18 +1404,21 @@ cdef class Cursor(object):
             properly.
         """
         if not self.is_open:
-            return False
+            return 0
 
         lsm_csr_close(self.cursor)
         self.is_open = False
-        return True
+        return 1
+
+    def close(self):
+        return self._close() and True or False
 
     def __enter__(self):
         """
         Expose the cursor as a context manager. After the wrapped block,
         the cursor will be closed, which is very important.
         """
-        self.open()
+        self._open()
         if self._reverse:
             self.last()
         else:
@@ -1413,7 +1426,7 @@ cdef class Cursor(object):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        self._close()
 
     def __iter__(self):
         """
