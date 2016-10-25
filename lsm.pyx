@@ -190,23 +190,6 @@ cdef extern from "src/lsm.h":
     cdef int lsm_csr_cmp(lsm_cursor *pCsr, const void *pKey, int nKey, int *piRes)
 
 
-cdef bint IS_PY3K = PY_MAJOR_VERSION == 3
-
-cdef inline bytes encode(obj):
-    cdef bytes result
-    if isinstance(obj, unicode):
-        result = PyUnicode_AsUTF8String(obj)
-    elif PyBytes_Check(obj):
-        result = <bytes>obj
-    elif obj is None:
-        return None
-    elif IS_PY3K:
-        result = bytes(str(obj), 'utf-8')
-    else:
-        result = bytes(obj)
-    return result
-
-
 cdef dict EXC_MAPPING = {
     LSM_NOMEM: MemoryError,
     LSM_READONLY: IOError,
@@ -228,6 +211,11 @@ cdef dict EXC_MESSAGE_MAPPING = {
     LSM_MISUSE: 'Misuse',
     LSM_MISMATCH: 'Mismatch',
 }
+
+cdef inline int ensure_bytes(obj) except -1:
+    if PyBytes_Check(obj) or obj is None:
+        return 1
+    raise ValueError('%r is not a bytes object.', obj)
 
 cdef inline _check(int rc):
     """Check the return value of a call to an LSM function."""
@@ -687,10 +675,6 @@ cdef class LSM(object):
             int rc
             Py_ssize_t klen, vlen
 
-        if IS_PY3K:
-            key = encode(key)
-            value = encode(value)
-
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
         PyBytes_AsStringAndSize(value, &vbuf, &vlen)
 
@@ -758,8 +742,6 @@ cdef class LSM(object):
             int vlen
             Py_ssize_t klen
 
-        if IS_PY3K:
-            key = encode(key)
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         # Use low-level cursor APIs for performance, since this method could
@@ -771,13 +753,7 @@ cdef class LSM(object):
             if rc == LSM_OK and lsm_csr_valid(pcursor):
                 rc = lsm_csr_value(pcursor, <const void **>(&vbuf), &vlen)
                 if rc == LSM_OK:
-                    value = vbuf[:vlen]
-                    if IS_PY3K:
-                        try:
-                            return value.decode('utf-8')
-                        except UnicodeDecodeError:
-                            pass
-                    return value
+                    return vbuf[:vlen]
             raise KeyError(key)
         finally:
             lsm_csr_close(pcursor)
@@ -964,8 +940,6 @@ cdef class LSM(object):
             char *kbuf
             Py_ssize_t klen
 
-        if IS_PY3K:
-            key = encode(key)
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
         _check(lsm_delete(self.db, kbuf, klen))
 
@@ -1000,9 +974,6 @@ cdef class LSM(object):
             char *eb
             Py_ssize_t sblen, eblen
 
-        if IS_PY3K:
-            start = encode(start)
-            end = encode(end)
         PyBytes_AsStringAndSize(start, &sb, &sblen)
         PyBytes_AsStringAndSize(end, &eb, &eblen)
 
@@ -1136,7 +1107,7 @@ cdef class LSM(object):
         cdef bytes value
         cdef int ivalue
         try:
-            value = encode(self[key])
+            value = self[key]
         except KeyError:
             ivalue = 0
         else:
@@ -1461,8 +1432,6 @@ cdef class Cursor(object):
             int rc, res
             Py_ssize_t klen
 
-        if IS_PY3K:
-            key = encode(key)
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         if nlen == 0:
@@ -1498,8 +1467,6 @@ cdef class Cursor(object):
             Py_ssize_t klen
             int rc
 
-        if IS_PY3K:
-            key = encode(key)
         PyBytes_AsStringAndSize(key, &kbuf, &klen)
 
         _check(lsm_csr_seek(
@@ -1627,13 +1594,7 @@ cdef class Cursor(object):
             int klen
 
         lsm_csr_key(self.cursor, <const void **>(&k), &klen)
-        key = k[:klen]
-        if IS_PY3K:
-            try:
-                return key.decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-        return key
+        return k[:klen]
 
     cdef inline _value(self):
         """Return the value at the cursor's current position."""
@@ -1642,13 +1603,7 @@ cdef class Cursor(object):
             int vlen
 
         lsm_csr_value(self.cursor, <const void **>(&v), &vlen)
-        value = v[:vlen]
-        if IS_PY3K:
-            try:
-                return value.decode('utf-8')
-            except UnicodeDecodeError:
-                pass
-        return value
+        return v[:vlen]
 
     def key(self):
         return self._key()

@@ -309,6 +309,18 @@ class TestLSM(BaseTestLSM):
         self.assertEqual(self.db.incr('i0'), 2)
         self.assertEqual(self.db.incr('i0'), 3)
 
+    def test_data_types(self):
+        key = bytes('k\xe2\x80\x941')
+        self.db[key] = key
+        ret = self.db[key]
+        self.assertEqual(ret, key)
+
+        ukey = key.decode('utf-8')
+        self.assertRaises(UnicodeEncodeError, lambda: self.db[ukey])
+        self.assertRaises(TypeError, lambda: self.db[1])
+        self.assertRaises(TypeError, lambda: self.db[1.0])
+        self.assertRaises(TypeError, lambda: self.db.insert(key, None))
+
 
 class TestTransactions(BaseTestLSM):
     def assertDepth(self, value):
