@@ -11,7 +11,7 @@ Features:
 * On-disk database stored in a single file.
 * Data is durable in the face of application or power failure.
 * Thread-safe.
-* Python 2.x and 3.x
+* Python 2.x
 
 Limitations:
 
