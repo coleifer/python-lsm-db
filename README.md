@@ -15,7 +15,7 @@ Features:
 
 Limitations:
 
-* Not tested on Windoze.
+* Not tested on Windows.
 
 The source for Python lsm-db is [hosted on GitHub](https://github.com/coleifer/python-lsm-db).
 
