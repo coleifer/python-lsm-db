@@ -29,5 +29,5 @@ setup(
     description='Python bindings for the SQLite4 LSM database.',
     author='Charles Leifer',
     author_email='',
-    ext_modules=cythonize(lsm_extension),
+    ext_modules=cythonize([lsm_extension]),
 )
