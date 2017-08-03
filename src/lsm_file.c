@@ -214,6 +214,7 @@ struct FileSystem {
   char *zDb;                      /* Database file name */
   char *zLog;                     /* Database file name */
   int nMetasize;                  /* Size of meta pages in bytes */
+  int nMetaRwSize;                /* Read/written size of meta pages in bytes */
   int nPagesize;                  /* Database page-size in bytes */
   int nBlocksize;                 /* Database block-size in bytes */
 
@@ -316,7 +317,7 @@ struct MetaPage {
 ** to catch IO errors (any error returned by a VFS method). 
 */
 #ifndef NDEBUG
-static void lsmIoerrBkpt(){
+static void lsmIoerrBkpt(void){
   static int nErr = 0;
   nErr++;
 }
@@ -447,7 +448,7 @@ int lsmEnvShmMap(
 }
 
 void lsmEnvShmBarrier(lsm_env *pEnv){
-  return pEnv->xShmBarrier();
+  pEnv->xShmBarrier();
 }
 
 void lsmEnvShmUnmap(lsm_env *pEnv, lsm_file *pFile, int bDel){
@@ -539,7 +540,7 @@ static int fsMmapPage(FileSystem *pFS, Pgno iReal){
 ** Given that there are currently nHash slots in the hash table, return 
 ** the hash key for file iFile, page iPg.
 */
-static int fsHashKey(int nHash, int iPg){
+static int fsHashKey(int nHash, Pgno iPg){
   return (iPg % nHash);
 }
 
@@ -635,7 +636,8 @@ int lsmFsOpen(
     pFS->zLog = &pFS->zDb[nDb+1];
     pFS->nPagesize = LSM_DFLT_PAGE_SIZE;
     pFS->nBlocksize = LSM_DFLT_BLOCK_SIZE;
-    pFS->nMetasize = 4 * 1024;
+    pFS->nMetasize = LSM_META_PAGE_SIZE;
+    pFS->nMetaRwSize = LSM_META_RW_PAGE_SIZE;
     pFS->pDb = pDb;
     pFS->pEnv = pDb->pEnv;
 
@@ -920,9 +922,9 @@ static Pgno fsLastPageOnBlock(FileSystem *pFS, int iBlock){
 */
 static int fsPageToBlock(FileSystem *pFS, Pgno iPg){
   if( pFS->pCompress ){
-    return (iPg / pFS->nBlocksize) + 1;
+    return (int)((iPg / pFS->nBlocksize) + 1);
   }else{
-    return 1 + ((iPg-1) / (pFS->nBlocksize / pFS->nPagesize));
+    return (int)(1 + ((iPg-1) / (pFS->nBlocksize / pFS->nPagesize)));
   }
 }
 
@@ -1149,6 +1151,17 @@ static void fsGrowMapping(
 }
 
 /*
+** If it is mapped, unmap the database file.
+*/
+int lsmFsUnmap(FileSystem *pFS){
+  int rc = LSM_OK;
+  if( pFS ){
+    rc = lsmEnvRemap(pFS->pEnv, pFS->fdDb, -1, &pFS->pMap, &pFS->nMap);
+  }
+  return rc;
+}
+
+/*
 ** fsync() the database file.
 */
 int lsmFsSyncDb(FileSystem *pFS, int nBlock){
@@ -1284,7 +1297,7 @@ static int fsReadData(
   assert( pFS->pCompress );
 
   iEob = fsLastPageOnPagesBlock(pFS, iOff) + 1;
-  nRead = LSM_MIN(iEob - iOff, nData);
+  nRead = (int)LSM_MIN(iEob - iOff, nData);
 
   rc = lsmEnvRead(pFS->pEnv, pFS->fdDb, iOff, aData, nRead);
   if( rc==LSM_OK && nRead!=nData ){
@@ -1720,8 +1733,8 @@ static int fsFreeBlock(
   int iBlk                        /* Block number of block to free */
 ){
   int rc = LSM_OK;                /* Return code */
-  int iFirst;                     /* First page on block iBlk */
-  int iLast;                      /* Last page on block iBlk */
+  Pgno iFirst;                    /* First page on block iBlk */
+  Pgno iLast;                     /* Last page on block iBlk */
   Level *pLevel;                  /* Used to iterate through levels */
 
   int iIn;                        /* Used to iterate through append points */
@@ -1854,7 +1867,7 @@ void lsmFsGobble(
   assert( nPgno>0 && 0==fsPageRedirects(pFS, pRun, aPgno[0]) );
 
   iBlk = fsPageToBlock(pFS, pRun->iFirst);
-  pRun->nSize += (pRun->iFirst - fsFirstPageOnBlock(pFS, iBlk));
+  pRun->nSize += (int)(pRun->iFirst - fsFirstPageOnBlock(pFS, iBlk));
 
   while( rc==LSM_OK ){
     int iNext = 0;
@@ -1865,13 +1878,13 @@ void lsmFsGobble(
     }
     rc = fsBlockNext(pFS, pRun, iBlk, &iNext);
     if( rc==LSM_OK ) rc = fsFreeBlock(pFS, pSnapshot, pRun, iBlk);
-    pRun->nSize -= (
+    pRun->nSize -= (int)(
         1 + fsLastPageOnBlock(pFS, iBlk) - fsFirstPageOnBlock(pFS, iBlk)
     );
     iBlk = iNext;
   }
 
-  pRun->nSize -= (pRun->iFirst - fsFirstPageOnBlock(pFS, iBlk));
+  pRun->nSize -= (int)(pRun->iFirst - fsFirstPageOnBlock(pFS, iBlk));
   assert( pRun->nSize>0 );
 }
 
@@ -2085,12 +2098,12 @@ int lsmFsSortedAppend(
 ){
   int rc = LSM_OK;
   Page *pPg = 0;
-  *ppOut = 0;
-  int iApp = 0;
-  int iNext = 0;
+  Pgno iApp = 0;
+  Pgno iNext = 0;
   Segment *p = &pLvl->lhs;
-  int iPrev = p->iLastPg;
+  Pgno iPrev = p->iLastPg;
 
+  *ppOut = 0;
   assert( p->pRedirect==0 );
 
   if( pFS->pCompress || bDefer ){
@@ -2114,10 +2127,10 @@ int lsmFsSortedAppend(
     if( iPrev==0 ){
       iApp = findAppendPoint(pFS, pLvl);
     }else if( fsIsLast(pFS, iPrev) ){
-      int iNext;
-      rc = fsBlockNext(pFS, 0, fsPageToBlock(pFS, iPrev), &iNext);
+      int iNext2;
+      rc = fsBlockNext(pFS, 0, fsPageToBlock(pFS, iPrev), &iNext2);
       if( rc!=LSM_OK ) return rc;
-      iApp = fsFirstPageOnBlock(pFS, iNext);
+      iApp = fsFirstPageOnBlock(pFS, iNext2);
     }else{
       iApp = iPrev + 1;
     }
@@ -2271,7 +2284,9 @@ int lsmFsMetaPageGet(
     }else{
       pPg->aData = lsmMallocRc(pFS->pEnv, pFS->nMetasize, &rc);
       if( rc==LSM_OK && bWrite==0 ){
-        rc = lsmEnvRead(pFS->pEnv, pFS->fdDb, iOff, pPg->aData, pFS->nMetasize);
+        rc = lsmEnvRead(
+            pFS->pEnv, pFS->fdDb, iOff, pPg->aData, pFS->nMetaRwSize
+        );
       }
 #ifndef NDEBUG
       /* pPg->aData causes an uninitialized access via a downstreadm write().
@@ -2311,7 +2326,7 @@ int lsmFsMetaPageRelease(MetaPage *pPg){
     if( pFS->nMapLimit==0 ){
       if( pPg->bWrite ){
         i64 iOff = (pPg->iPg==2 ? pFS->nMetasize : 0);
-        int nWrite = pFS->nMetasize;
+        int nWrite = pFS->nMetaRwSize;
         rc = lsmEnvWrite(pFS->pEnv, pFS->fdDb, iOff, pPg->aData, nWrite);
       }
       lsmFree(pFS->pEnv, pPg->aData);
@@ -2328,7 +2343,7 @@ int lsmFsMetaPageRelease(MetaPage *pPg){
 ** set *pnData to the size of the meta-page in bytes before returning.
 */
 u8 *lsmFsMetaPageData(MetaPage *pPg, int *pnData){
-  if( pnData ) *pnData = pPg->pFS->nMetasize;
+  if( pnData ) *pnData = pPg->pFS->nMetaRwSize;
   return pPg->aData;
 }
 
@@ -2453,8 +2468,8 @@ static Pgno fsAppendData(
   int rc = *pRc;
   assert( pFS->pCompress );
   if( rc==LSM_OK ){
-    int nRem;
-    int nWrite;
+    int nRem = 0;
+    int nWrite = 0;
     Pgno iLastOnBlock;
     Pgno iApp = pSeg->iLastPg+1;
 
@@ -2473,7 +2488,7 @@ static Pgno fsAppendData(
     /* Write as much data as is possible at iApp (usually all of it). */
     iLastOnBlock = fsLastPageOnPagesBlock(pFS, iApp);
     if( rc==LSM_OK ){
-      int nSpace = iLastOnBlock - iApp + 1;
+      int nSpace = (int)(iLastOnBlock - iApp + 1);
       nWrite = LSM_MIN(nData, nSpace);
       nRem = nData - nWrite;
       assert( nWrite>=0 );
@@ -2796,7 +2811,7 @@ int lsmFsSortedPadding(
 
     iLast2 = (1 + iLast/pFS->szSector) * pFS->szSector - 1;
     assert( fsPageToBlock(pFS, iLast)==fsPageToBlock(pFS, iLast2) );
-    nPad = iLast2 - iLast;
+    nPad = (int)(iLast2 - iLast);
 
     if( iLast2>fsLastPageOnPagesBlock(pFS, iLast) ){
       nPad -= 4;
@@ -3253,10 +3268,10 @@ int lsmFsIntegrityCheck(lsm_db *pDb){
   }
 
   for(pLevel=pWorker->pLevel; pLevel; pLevel=pLevel->pNext){
-    int i;
+    int j;
     checkBlocks(pFS, &pLevel->lhs, (pLevel->nRight!=0), nBlock, aUsed);
-    for(i=0; i<pLevel->nRight; i++){
-      checkBlocks(pFS, &pLevel->aRhs[i], 0, nBlock, aUsed);
+    for(j=0; j<pLevel->nRight; j++){
+      checkBlocks(pFS, &pLevel->aRhs[j], 0, nBlock, aUsed);
     }
   }
 

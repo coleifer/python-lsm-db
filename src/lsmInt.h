@@ -23,7 +23,13 @@
 #include <stdio.h>
 #include <ctype.h>
 
-#include <unistd.h>
+#ifdef _WIN32
+# ifdef _MSC_VER
+#  define snprintf _snprintf
+# endif
+#else
+# include <unistd.h>
+#endif
 
 #ifdef NDEBUG
 # ifdef LSM_DEBUG_EXPENSIVE
@@ -58,8 +64,6 @@
 ** database file does not contain a valid checkpoint.  */
 #define LSM_CKSUM0_INIT 42
 #define LSM_CKSUM1_INIT 42
-
-#define LSM_META_PAGE_SIZE 4096
 
 /* "mmap" mode is currently only used in environments with 64-bit address 
 ** spaces. The following macro is used to test for this.  */
@@ -147,6 +151,15 @@ int lsmErrorBkpt(int);
 #define LSM_LOCK_ROTRANS      7
 #define LSM_LOCK_READER(i)    ((i) + LSM_LOCK_ROTRANS + 1)
 #define LSM_LOCK_RWCLIENT(i)  ((i) + LSM_LOCK_READER(LSM_LOCK_NREADER))
+
+#define LSM_N_LOCK LSM_LOCK_RWCLIENT(LSM_LOCK_NRWCLIENT)
+
+/*
+** Meta-page size and usable size.
+*/
+#define LSM_META_PAGE_SIZE 4096
+
+#define LSM_META_RW_PAGE_SIZE (LSM_META_PAGE_SIZE - LSM_N_LOCK)
 
 /*
 ** Hard limit on the number of free-list entries that may be stored in 
@@ -576,7 +589,7 @@ struct Snapshot {
 /*
 ** Functions from file "lsm_ckpt.c".
 */
-int lsmCheckpointWrite(lsm_db *, int, u32 *);
+int lsmCheckpointWrite(lsm_db *, u32 *);
 int lsmCheckpointLevels(lsm_db *, int, void **, int *);
 int lsmCheckpointLoadLevels(lsm_db *pDb, void *pVal, int nVal);
 
@@ -682,6 +695,8 @@ int lsmFsOpen(lsm_db *, const char *, int);
 int lsmFsOpenLog(lsm_db *, int *);
 void lsmFsCloseLog(lsm_db *);
 void lsmFsClose(FileSystem *);
+
+int lsmFsUnmap(FileSystem *);
 
 int lsmFsConfigure(lsm_db *db);
 
@@ -851,7 +866,7 @@ int lsmInfoFreelist(lsm_db *pDb, char **pzOut);
 ** Functions from file "lsm_log.c".
 */
 int lsmLogBegin(lsm_db *pDb);
-int lsmLogWrite(lsm_db *, void *, int, void *, int);
+int lsmLogWrite(lsm_db *, int, void *, int, void *, int);
 int lsmLogCommit(lsm_db *);
 void lsmLogEnd(lsm_db *pDb, int bCommit);
 void lsmLogTell(lsm_db *, LogMark *);
@@ -861,6 +876,10 @@ void lsmLogClose(lsm_db *);
 int lsmLogRecover(lsm_db *);
 int lsmInfoLogStructure(lsm_db *pDb, char **pzVal);
 
+/* Valid values for the second argument to lsmLogWrite(). */
+#define LSM_WRITE        0x06
+#define LSM_DELETE       0x08
+#define LSM_DRANGE       0x0A
 
 /**************************************************************************
 ** Functions from file "lsm_shared.c".

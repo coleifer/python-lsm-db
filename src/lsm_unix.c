@@ -12,6 +12,9 @@
 **
 ** Unix-specific run-time environment implementation for LSM.
 */
+
+#ifndef _WIN32
+
 #if defined(__GNUC__) || defined(__TINYC__)
 /* workaround for ftruncate() visibility on gcc. */
 # ifndef _XOPEN_SOURCE
@@ -306,7 +309,7 @@ static int lsmPosixOsUnlink(lsm_env *pEnv, const char *zFile){
   return prc ? LSM_IOERR_BKPT : LSM_OK;
 }
 
-int lsmPosixOsLock(lsm_file *pFile, int iLock, int eType){
+static int lsmPosixOsLock(lsm_file *pFile, int iLock, int eType){
   int rc = LSM_OK;
   PosixFile *p = (PosixFile *)pFile;
   static const short aType[3] = { F_UNLCK, F_RDLCK, F_WRLCK };
@@ -336,7 +339,7 @@ int lsmPosixOsLock(lsm_file *pFile, int iLock, int eType){
   return rc;
 }
 
-int lsmPosixOsTestLock(lsm_file *pFile, int iLock, int nLock, int eType){
+static int lsmPosixOsTestLock(lsm_file *pFile, int iLock, int nLock, int eType){
   int rc = LSM_OK;
   PosixFile *p = (PosixFile *)pFile;
   static const short aType[3] = { 0, F_RDLCK, F_WRLCK };
@@ -352,7 +355,7 @@ int lsmPosixOsTestLock(lsm_file *pFile, int iLock, int nLock, int eType){
   lock.l_whence = SEEK_SET;
   lock.l_len = nLock;
   lock.l_type = aType[eType];
-  lock.l_start = (4096-iLock);
+  lock.l_start = (4096-iLock-nLock+1);
 
   if( fcntl(p->fd, F_GETLK, &lock) ){
     rc = LSM_IOERR_BKPT;
@@ -363,7 +366,7 @@ int lsmPosixOsTestLock(lsm_file *pFile, int iLock, int nLock, int eType){
   return rc;
 }
 
-int lsmPosixOsShmMap(lsm_file *pFile, int iChunk, int sz, void **ppShm){
+static int lsmPosixOsShmMap(lsm_file *pFile, int iChunk, int sz, void **ppShm){
   PosixFile *p = (PosixFile *)pFile;
 
   *ppShm = 0;
@@ -417,10 +420,10 @@ int lsmPosixOsShmMap(lsm_file *pFile, int iChunk, int sz, void **ppShm){
   return LSM_OK;
 }
 
-void lsmPosixOsShmBarrier(void){
+static void lsmPosixOsShmBarrier(void){
 }
 
-int lsmPosixOsShmUnmap(lsm_file *pFile, int bDelete){
+static int lsmPosixOsShmUnmap(lsm_file *pFile, int bDelete){
   PosixFile *p = (PosixFile *)pFile;
   if( p->shmfd>0 ){
     int i;
@@ -739,3 +742,5 @@ lsm_env *lsm_default_env(void){
   };
   return &posix_env;
 }
+
+#endif
