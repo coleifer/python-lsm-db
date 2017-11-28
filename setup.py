@@ -16,7 +16,7 @@ if cython_installed:
     python_source = 'lsm.pyx'
 else:
     python_source = 'lsm.c'
-    cythonize = lambda obj: [obj]
+    cythonize = lambda obj: obj
 
 library_source = glob.glob('src/*.c')
 lsm_extension = Extension(
