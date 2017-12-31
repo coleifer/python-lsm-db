@@ -3,6 +3,7 @@ from cpython.bytes cimport PyBytes_Check
 from cpython.unicode cimport PyUnicode_AsUTF8String
 from cpython.version cimport PY_MAJOR_VERSION
 import struct
+import sys
 
 try:
     from os import fsencode
@@ -222,6 +223,19 @@ cdef inline _check(int rc):
     if rc != LSM_OK:
         exc_class = EXC_MAPPING.get(rc, Exception)
         raise exc_class(EXC_MESSAGE_MAPPING.get(rc, 'Unknown error'))
+
+cdef bint IS_PY3K = sys.version_info[0] == 3
+
+cdef bytes encode(obj):
+    if isinstance(obj, unicode):
+        return obj.encode('utf-8')
+    elif isinstance(obj, bytes):
+        return obj
+    elif obj is None:
+        return obj
+    elif IS_PY3K:
+        return bytes(str(obj), 'utf-8')
+    return bytes(obj)
 
 
 cdef set OPTIONS = set([])
@@ -670,13 +684,15 @@ cdef class LSM(object):
                 lsm_db['key'] = 'value'
         """
         cdef:
+            bytes bkey = encode(key)
+            bytes bvalue = encode(value)
             char *kbuf
             char *vbuf
             int rc
             Py_ssize_t klen, vlen
 
-        PyBytes_AsStringAndSize(key, &kbuf, &klen)
-        PyBytes_AsStringAndSize(value, &vbuf, &vlen)
+        PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
+        PyBytes_AsStringAndSize(bvalue, &vbuf, &vlen)
 
         _check(lsm_insert(
             self.db,
@@ -736,13 +752,14 @@ cdef class LSM(object):
         """
         cdef:
             lsm_cursor *pcursor = <lsm_cursor *>0
+            bytes bkey = encode(key)
             char *kbuf
             char *vbuf
             int rc
             int vlen
             Py_ssize_t klen
 
-        PyBytes_AsStringAndSize(key, &kbuf, &klen)
+        PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
 
         # Use low-level cursor APIs for performance, since this method could
         # be a hot-spot. Another idea is to use a cursor cache or a shared
@@ -937,10 +954,11 @@ cdef class LSM(object):
                 del lsm_db['some-key']
         """
         cdef:
+            bytes bkey = encode(key)
             char *kbuf
             Py_ssize_t klen
 
-        PyBytes_AsStringAndSize(key, &kbuf, &klen)
+        PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
         _check(lsm_delete(self.db, kbuf, klen))
 
     cpdef delete_range(self, start, end):
@@ -970,12 +988,14 @@ cdef class LSM(object):
             [('d', 'D'), ('e', 'E'), ('f', 'F')]
         """
         cdef:
+            bytes bstart = encode(start)
+            bytes bend = encode(end)
             char *sb
             char *eb
             Py_ssize_t sblen, eblen
 
-        PyBytes_AsStringAndSize(start, &sb, &sblen)
-        PyBytes_AsStringAndSize(end, &eb, &eblen)
+        PyBytes_AsStringAndSize(bstart, &sb, &sblen)
+        PyBytes_AsStringAndSize(bend, &eb, &eblen)
 
         _check(lsm_delete_range(self.db, sb, sblen, eb, eblen))
 
@@ -1428,11 +1448,12 @@ cdef class Cursor(object):
         Compare the given key with key at the cursor's current position.
         """
         cdef:
+            bytes bkey = encode(key)
             char *kbuf
             int rc, res
             Py_ssize_t klen
 
-        PyBytes_AsStringAndSize(key, &kbuf, &klen)
+        PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
 
         if nlen == 0:
             nlen = klen
@@ -1463,11 +1484,12 @@ cdef class Cursor(object):
         http://www.sqlite.org/src4/doc/trunk/www/lsmapi.wiki#lsm_csr_seek
         """
         cdef:
+            bytes bkey = encode(key)
             char *kbuf
             Py_ssize_t klen
             int rc
 
-        PyBytes_AsStringAndSize(key, &kbuf, &klen)
+        PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
 
         _check(lsm_csr_seek(
             self.cursor,
