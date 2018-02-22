@@ -884,7 +884,7 @@ class TestLSMInfo(BaseTestLSM):
         w1 = db.pages_written()
         r1 = db.pages_read()
         c1 = db.checkpoint_size()
-        self.assertEqual(w1, 976)
+        self.assertEqual(w1, 974)
         self.assertEqual(r1, 0)  # Not sure why not increasing...
         self.assertEqual(c1, 0)
 
