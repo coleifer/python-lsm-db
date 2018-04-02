@@ -1,6 +1,7 @@
 from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.unicode cimport PyUnicode_AsUTF8String
+from cpython.unicode cimport PyUnicode_Check
 from cpython.version cimport PY_MAJOR_VERSION
 import struct
 import sys
@@ -226,16 +227,19 @@ cdef inline _check(int rc):
 
 cdef bint IS_PY3K = sys.version_info[0] == 3
 
-cdef bytes encode(obj):
-    if isinstance(obj, unicode):
-        return obj.encode('utf-8')
-    elif isinstance(obj, bytes):
-        return obj
+cdef inline bytes encode(obj):
+    cdef bytes result
+    if PyUnicode_Check(obj):
+        result = PyUnicode_AsUTF8String(obj)
+    elif PyBytes_Check(obj):
+        result = <bytes>obj
     elif obj is None:
-        return obj
+        return None
     elif IS_PY3K:
-        return bytes(str(obj), 'utf-8')
-    return bytes(obj)
+        result = PyUnicode_AsUTF8String(str(obj))
+    else:
+        result = bytes(obj)
+    return result
 
 
 cdef set OPTIONS = set([])
