@@ -29,6 +29,7 @@ API Documentation
       insert,
       update,
       fetch,
+      fetch_bulk,
       fetch_range,
       delete,
       delete_range,
