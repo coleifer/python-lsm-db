@@ -100,6 +100,17 @@ class TestLSM(BaseTestLSM):
         self.assertBEqual(self.db.fetch('k22', lsm.SEEK_LE), 'v2')
         self.assertBEqual(self.db.fetch('k22', lsm.SEEK_GE), 'v3')
 
+    def test_fetch_bulk(self):
+        self.db.update({'k1': 'v1', 'k2': 'v2', 'k3': 'v3', 'k4': 'v4'})
+        res = self.db.fetch_bulk(['k1', 'k2', 'k3', 'kx'])
+        self.assertEqual(res, {'k1': b'v1', 'k2': b'v2', 'k3': b'v3'})
+
+        res = self.db.fetch_bulk(['k4'])
+        self.assertEqual(res, {'k4': b'v4'})
+
+        res = self.db.fetch_bulk(['foo', 'bar'])
+        self.assertEqual(res, {})
+
     def assertIterEqual(self, i, expected):
         self.assertBEqual(list(i), expected)
 

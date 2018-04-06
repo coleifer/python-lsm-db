@@ -779,6 +779,41 @@ cdef class LSM(object):
         finally:
             lsm_csr_close(pcursor)
 
+    cpdef fetch_bulk(self, keys, int seek_method=LSM_SEEK_EQ):
+        """
+        Retrieve multiple values from the database.
+
+        :param list keys: Keys to retrieve.
+        :param int seek_method: Instruct the database how to match the key.
+        :return: dictionary mapping key to value.
+        """
+        cdef:
+            lsm_cursor *pcursor = <lsm_cursor *>0
+            bytes bkey
+            char *kbuf
+            char *vbuf
+            dict accum = {}
+            int rc
+            int vlen
+            Py_ssize_t klen
+
+        lsm_csr_open(self.db, &pcursor)
+
+        try:
+            for key in keys:
+                bkey = encode(key)
+                PyBytes_AsStringAndSize(bkey, &kbuf, &klen)
+
+                rc = lsm_csr_seek(pcursor, <void *>kbuf, klen, seek_method)
+                if rc == LSM_OK and lsm_csr_valid(pcursor):
+                    rc = lsm_csr_value(pcursor, <const void **>(&vbuf), &vlen)
+                    if rc == LSM_OK:
+                        accum[key] = vbuf[:vlen]
+        finally:
+            lsm_csr_close(pcursor)
+
+        return accum
+
     def fetch_range(self, start, end, reverse=False):
         """
         Fetch a range of keys, inclusive of both the start and end keys. If
