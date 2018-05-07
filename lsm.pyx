@@ -18,7 +18,7 @@ except ImportError:
     fsencode = lambda s: s.encode(_fsencoding)
 
 
-cdef extern from "src/lsm.h":
+cdef extern from "src/lsm.h" nogil:
     ctypedef struct lsm_db
     ctypedef struct lsm_env
     ctypedef struct lsm_cursor
