@@ -1,7 +1,8 @@
 import glob
 import os
 
-from distutils.core import setup, Extension
+from setuptools import setup
+from setuptools.extension import Extension
 try:
     from Cython.Build import cythonize
 except ImportError:
