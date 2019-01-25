@@ -97,9 +97,9 @@ cdef extern from "src/lsm.h" nogil:
     cdef int lsm_delete(lsm_db *pDb, const void *pKey, int nKey)
     cdef int lsm_delete_range(lsm_db *pDb, const void *pKey, int nKey, const void *pKey2, int nKey2)
 
-    cdef int lsm_work(lsm_db *pDb, int nMerge, int nKB, int *pnWrite) nogil
-    cdef int lsm_flush(lsm_db *pDb) nogil
-    cdef int lsm_checkpoint(lsm_db *pDb, int *pNumKBWritten) nogil
+    cdef int lsm_work(lsm_db *pDb, int nMerge, int nKB, int *pnWrite)
+    cdef int lsm_flush(lsm_db *pDb)
+    cdef int lsm_checkpoint(lsm_db *pDb, int *pNumKBWritten)
 
     # Cursors.
     cdef int lsm_csr_open(lsm_db *pDb, lsm_cursor **ppCsr)
@@ -394,7 +394,10 @@ cdef class LSM(object):
         Open the database. If the database was already open, this will return
         False, otherwise returns True on success.
         """
-        cdef int rc
+        cdef:
+            char *filename = self.encoded_filename
+            int rc
+
         if self.is_open:
             return False
 
@@ -404,7 +407,10 @@ cdef class LSM(object):
         for key, value in self._options.items():
             setattr(self, key, value)
 
-        _check(lsm_open(self.db, self.encoded_filename))
+        with nogil:
+            rc = lsm_open(self.db, filename)
+
+        _check(rc)
         self.is_open = True
         self.was_opened = True
         return True
@@ -424,7 +430,9 @@ cdef class LSM(object):
         if not self.is_open:
             return False
 
-        rc = lsm_close(self.db)
+        with nogil:
+            rc = lsm_close(self.db)
+
         if rc in (LSM_BUSY, LSM_MISUSE):
             raise IOError('Unable to close database, one or more '
                           'cursors may still be in use.')
