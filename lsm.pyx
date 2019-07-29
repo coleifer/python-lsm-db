@@ -1,3 +1,4 @@
+# cython: language_level=3
 from cpython.bytes cimport PyBytes_AsStringAndSize
 from cpython.bytes cimport PyBytes_Check
 from cpython.unicode cimport PyUnicode_AsUTF8String
@@ -200,6 +201,7 @@ cdef dict EXC_MAPPING = {
     LSM_FULL: IOError,
     LSM_CANTOPEN: IOError,
 }
+
 cdef dict EXC_MESSAGE_MAPPING = {
     LSM_ERROR: 'Error',
     LSM_BUSY: 'Busy',
@@ -228,17 +230,13 @@ cdef inline _check(int rc):
 cdef bint IS_PY3K = sys.version_info[0] == 3
 
 cdef inline bytes encode(obj):
-    cdef bytes result
+    cdef bytes result = None
     if PyUnicode_Check(obj):
         result = PyUnicode_AsUTF8String(obj)
     elif PyBytes_Check(obj):
         result = <bytes>obj
-    elif obj is None:
-        return None
-    elif IS_PY3K:
-        result = PyUnicode_AsUTF8String(str(obj))
-    else:
-        result = bytes(obj)
+    elif obj is not None:
+        result = PyUnicode_AsUTF8String(unicode(obj))
     return result
 
 
@@ -375,7 +373,7 @@ cdef class LSM(object):
         if isinstance(filename, unicode):
             self.encoded_filename = fsencode(filename)
         else:
-            self.encoded_filename = bytes(filename)
+            self.encoded_filename = encode(filename)
 
         bad_options = set(options) - OPTIONS
         if bad_options:
@@ -396,7 +394,6 @@ cdef class LSM(object):
         """
         cdef:
             char *filename = self.encoded_filename
-            int rc
 
         if self.is_open:
             return False
@@ -407,10 +404,7 @@ cdef class LSM(object):
         for key, value in self._options.items():
             setattr(self, key, value)
 
-        with nogil:
-            rc = lsm_open(self.db, filename)
-
-        _check(rc)
+        _check(lsm_open(self.db, filename))
         self.is_open = True
         self.was_opened = True
         return True
@@ -430,9 +424,7 @@ cdef class LSM(object):
         if not self.is_open:
             return False
 
-        with nogil:
-            rc = lsm_close(self.db)
-
+        rc = lsm_close(self.db)
         if rc in (LSM_BUSY, LSM_MISUSE):
             raise IOError('Unable to close database, one or more '
                           'cursors may still be in use.')
@@ -1205,10 +1197,7 @@ cdef class LSM(object):
         database. Checkpointing involves updating the database file header and
         (usually) syncing the contents of the database file to disk.
         """
-        cdef int rc
-        with nogil:
-            rc = lsm_flush(self.db)
-        _check(rc)
+        _check(lsm_flush(self.db))
 
     cpdef int work(self, int nmerge=1, int nkb=4096) except -1:
         """
@@ -1234,8 +1223,7 @@ cdef class LSM(object):
         """
         cdef int nbytes_written
         cdef int rc
-        with nogil:
-            rc = lsm_work(self.db, nmerge, nkb, &nbytes_written)
+        rc = lsm_work(self.db, nmerge, nkb, &nbytes_written)
         if rc == LSM_BUSY:
             raise RuntimeError('Unable to acquire the worker lock. Perhaps '
                                'another thread or process is working on the '
@@ -1253,10 +1241,7 @@ cdef class LSM(object):
         previous checkpoint (the same measure as returned by the
         LSM_INFO_CHECKPOINT_SIZE query).
         """
-        cdef int rc
-        with nogil:
-            rc = lsm_checkpoint(self.db, &nkb)
-        _check(rc)
+        _check(lsm_checkpoint(self.db, &nkb))
         return nkb
 
     cpdef begin(self):
