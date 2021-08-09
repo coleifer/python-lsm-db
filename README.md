@@ -1,6 +1,6 @@
 ![Python LSM-DB](http://media.charlesleifer.com/blog/photos/lsm.png)
 
-Fast Python bindings for [SQLite's LSM key/value store](http://www.sqlite.org/src4/doc/trunk/www/lsmusr.wiki>).
+Fast Python bindings for [SQLite's LSM key/value store](http://www.sqlite.org/src4/doc/trunk/www/lsmusr.wiki).
 The LSM storage engine was initially written as part of the experimental
 SQLite4 rewrite (now abandoned). More recently, the LSM source code was moved
 into the SQLite3 [source tree](https://www.sqlite.org/cgi/src/dir?ci=e148cdad35520e66&name=ext/lsm1)
