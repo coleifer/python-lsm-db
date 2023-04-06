@@ -3,6 +3,7 @@ include LICENSE
 include SQLITE_LICENSE
 include lsm.c
 include lsm.pyx
+include pyproject.toml
 include tests.py
 recursive-include docs *
 recursive-include src *
