@@ -26,7 +26,7 @@ lsm_extension = Extension(
 
 setup(
     name='lsm-db',
-    version='0.7.0',
+    version='0.7.1',
     description='Python bindings for the SQLite4 LSM database.',
     author='Charles Leifer',
     author_email='',
