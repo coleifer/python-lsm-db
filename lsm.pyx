@@ -1636,7 +1636,7 @@ cdef class Cursor(object):
             try:
                 self.seek(start, seek_method)
             except KeyError:
-                raise StopIteration
+                return
 
         for key, value in self.fetch_until(end):
             yield (key, value)
@@ -1667,25 +1667,29 @@ cdef class Cursor(object):
 
     def keys(self):
         """Return a generator that successively yields keys."""
-        if not self.is_valid():
-            raise StopIteration
-        while True:
-            yield self._key()
-            if self._reverse:
-                self.previous()
-            else:
-                self.next()
+        if self.is_valid():
+            while True:
+                yield self._key()
+                try:
+                    if self._reverse:
+                        self.previous()
+                    else:
+                        self.next()
+                except StopIteration:
+                    break
 
     def values(self):
         """Return a generator that successively yields values."""
-        if not self.is_valid():
-            raise StopIteration
-        while True:
-            yield self._value()
-            if self._reverse:
-                self.previous()
-            else:
-                self.next()
+        if self.is_valid():
+            while True:
+                yield self._value()
+                try:
+                    if self._reverse:
+                        self.previous()
+                    else:
+                        self.next()
+                except StopIteration:
+                    break
 
 
 cdef class Transaction(object):
