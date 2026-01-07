@@ -1,2 +1,25 @@
 [build-system]
 requires = ["setuptools", "wheel", "cython"]
+
+[project]
+name = "lsm-db"
+version = "0.7.3"
+description = "bindings for the sqlite lsm4 database"
+readme = "README.md"
+authors = [
+    { name = "Charles Leifer", email = "coleifer@gmail.com" }
+]
+classifiers = [
+    "Programming Language :: Python :: 2",
+    "Programming Language :: Python :: 3",
+    "Topic :: Database :: Database Engines/Servers",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Repository = "https://github.com/coleifer/python-lsm-db"
+Documentation = "https://lsm-db.readthedocs.io/"
+
+[tool.setuptools]
+py-modules = ["lsm"]
